@@ -1,5 +1,20 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+法令・省令・政令・ガイドラインの公示を検知し、「誰向けに／何がどう変わり／何をしないといけないか」を一覧・通知するアプリです。
+
+## ドキュメント
+
+- **[アーキテクチャ概要](docs/architecture.md)** — 全体構成（コンテキスト図）、データ構造（ER図）、環境構成案。実装チケットはここを参照。
+
+## 初回セットアップ
+
+1. `.env.example` をコピーして `.env` を作成し、`DATABASE_URL` を設定する。
+2. DB にマイグレーションを適用する。
+   ```bash
+   npx prisma migrate deploy
+   ```
+3. （任意）Slack 通知を使う場合は `.env` に `SLACK_WEBHOOK_URL` を設定する。
+
 ## Getting Started
 
 First, run the development server:

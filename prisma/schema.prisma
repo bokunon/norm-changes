@@ -1,0 +1,101 @@
+// 法令インパクト管理システム - データモデル
+// docs/architecture.md の ER 図に準拠
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // 接続 URL は prisma.config.ts で指定
+}
+
+// 法令・ガイドライン等の一次情報（法律・政令・省令・ガイドライン等）
+model NormSource {
+  id          String   @id @default(cuid())
+  externalId  String?  @unique // e-Gov 法令API の LawId など（重複登録防止用）
+  type        String   // LAW, ORDINANCE, REGULATION, GUIDELINE, NOTICE, OTHER
+  title       String
+  number      String?  // 法令番号など
+  publisher   String?  // 所管省庁
+  publishedAt DateTime
+  effectiveAt DateTime?
+  url         String?
+  rawText     String?  @db.Text // 本文（全文 or 要点）
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  changes NormChange[]
+}
+
+// 実務上の「変更点」「対応が必要な論点」の単位
+model NormChange {
+  id               String    @id @default(cuid())
+  normSourceId     String
+  summary          String    @db.Text
+  obligationLevel  String    // MUST, SHOULD, INFO
+  penaltyRisk      String    // HIGH, MID, LOW, NONE
+  penaltyDetail    String?   @db.Text
+  effectiveFrom    DateTime?
+  deadline         DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  normSource   NormSource      @relation(fields: [normSourceId], references: [id], onDelete: Cascade)
+  tags         NormChangeTag[]
+}
+
+// 業界・機能領域・データ種別などの汎用タグ
+model Tag {
+  id          String   @id @default(cuid())
+  type        String   // INDUSTRY, BUSINESS_SIZE, FUNCTION, DATA_TYPE, RISK_LEVEL, OTHER
+  key         String   @unique // 内部キー（例: finance, hr, personal_info）
+  labelJa     String   // 表示名
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  normChanges NormChangeTag[]
+}
+
+// NormChange と Tag の多対多中間テーブル
+model NormChangeTag {
+  id            String   @id @default(cuid())
+  normChangeId  String
+  tagId         String
+  createdAt     DateTime @default(now())
+
+  normChange NormChange @relation(fields: [normChangeId], references: [id], onDelete: Cascade)
+  tag        Tag        @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([normChangeId, tagId])
+  @@index([normChangeId])
+  @@index([tagId])
+}
+
+// 利用者（Web/Slack 通知の対象）
+model User {
+  id          String   @id @default(cuid())
+  name        String?
+  email       String?
+  slackUserId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  filters UserFilter[]
+}
+
+// ユーザーごとの関心タグ条件（Web フィルタ・Slack 通知条件）
+model UserFilter {
+  id            String   @id @default(cuid())
+  userId        String
+  name          String   // フィルタ名（例: 自分用, 情シス担当用）
+  includeTagIds String   @db.Text // JSON 配列（Tag.id のリスト）
+  excludeTagIds String?  @db.Text // JSON 配列（任意）
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
