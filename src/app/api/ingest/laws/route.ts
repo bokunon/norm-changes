@@ -1,38 +1,32 @@
 /**
- * e-Gov 更新法令一覧を取得し、NormSource に保存する
+ * e-Gov bulkdownload で日付指定の更新法令一覧を取得し、NormSource に保存する
  * GET /api/ingest/laws?date=yyyyMMdd
+ * Issue #22: bulkdownload（ZIP解凍・CSVパース）に切り替え
+ * Issue #23: 公示日は CSV「改正法令公布日」で保存（空なら「公布日」）
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import {
-  fetchUpdateLawList,
-  lawInfoToNormSourceFields,
-  type LawNameListInfo,
-} from "@/lib/egov-api";
+import { fetchBulkdownloadList } from "@/lib/bulkdownload";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const date = searchParams.get("date");
   const yyyyMMdd = date ?? formatDate(new Date());
 
-  const result = await fetchUpdateLawList(yyyyMMdd);
-  if (!result.ok || !result.data) {
-    // ブラウザで開いてもエラー内容が見えるよう 200 で JSON を返す
+  const result = await fetchBulkdownloadList(yyyyMMdd);
+  if (!result.ok) {
     return NextResponse.json({
       ok: false,
       error: result.error ?? "取得に失敗しました",
-      hint: "e-Gov API の障害や日付指定（yyyyMMdd）の誤り、XML形式変更の可能性があります。",
+      hint: "e-Gov bulkdownload の障害や日付指定（yyyyMMdd）の誤り、ZIP/CSV形式変更の可能性があります。",
     });
   }
 
-  const list = result.data.LawNameListInfo;
-  const items = Array.isArray(list) ? list : [list];
+  const items = result.rows;
   let created = 0;
   let updated = 0;
-  let skipped = 0;
 
-  for (const info of items as LawNameListInfo[]) {
-    const fields = lawInfoToNormSourceFields(info);
+  for (const fields of items) {
     const existing = await prisma.normSource.findUnique({
       where: { externalId: fields.externalId ?? undefined },
     });
@@ -73,7 +67,7 @@ export async function GET(request: Request) {
     total: items.length,
     created,
     updated,
-    skipped,
+    skipped: 0,
   });
 }
 
