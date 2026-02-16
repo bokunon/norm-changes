@@ -45,6 +45,7 @@ export async function GET(
             effectiveAt: change.normSource.effectiveAt?.toISOString() ?? null,
             url: change.normSource.url,
             rawText: change.normSource.rawText,
+            rawTextPrev: change.normSource.rawTextPrev,
           }
         : null,
       tags: change.tags.map((rel: { tag: { id: string; type: string; key: string; labelJa: string; description: string | null } }) => rel.tag),

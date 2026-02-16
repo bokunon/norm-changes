@@ -21,7 +21,8 @@ model NormSource {
   publishedAt DateTime
   effectiveAt DateTime?
   url         String?
-  rawText     String?  @db.Text // 本文（全文 or 要点）
+  rawText     String?  @db.Text // 本文（改正後全文。Issue #24）
+  rawTextPrev String?  @db.Text // 改正前全文（比較用。Issue #25）
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

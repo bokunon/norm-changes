@@ -22,6 +22,7 @@ type Detail = {
     effectiveAt: string | null;
     url: string | null;
     rawText: string | null;
+    rawTextPrev: string | null;
   } | null;
   tags: { id: string; key: string; labelJa: string; type: string }[];
 };
@@ -135,10 +136,59 @@ export default function NormChangeDetailPage() {
               href={item.normSource.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-600 dark:text-blue-400 underline text-sm"
+              className="text-blue-600 dark:text-blue-400 underline text-sm block mb-6"
             >
               法令本文（e-Gov）を開く
             </a>
+          )}
+          {/* 改正後全文・改正前全文（#24, #25）。並べて比較できる想定。改正前は API 取得できた場合のみ表示 */}
+          {(item.normSource?.rawText != null || item.normSource?.rawTextPrev != null) && (
+            <section className="border-t border-zinc-200 dark:border-zinc-700 pt-6 mt-6">
+              <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-2">
+                改正後・改正前の全文（並べて比較用）
+              </h2>
+              {item.normSource?.rawTextPrev == null ||
+              item.normSource.rawTextPrev === "" ? (
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-3">
+                  改正前の全文は現時点で取得できていません。表示されているのは改正後（現行）のみです。前後比較するには e-Gov API v2（law_revisions / law_data）の仕様確認が必要です。
+                </p>
+              ) : null}
+              <div className="grid gap-6">
+                {item.normSource?.rawText != null && item.normSource.rawText !== "" && (
+                  <div>
+                    <h3 className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">
+                      改正後（現行）全文
+                    </h3>
+                    <div className="rounded border border-zinc-200 dark:border-zinc-700 p-4 bg-zinc-50 dark:bg-zinc-800/50 max-h-80 overflow-y-auto">
+                      <pre className="whitespace-pre-wrap font-sans text-sm text-zinc-800 dark:text-zinc-200">
+                        {item.normSource.rawText}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+                {item.normSource?.rawTextPrev != null && item.normSource.rawTextPrev !== "" ? (
+                  <div>
+                    <h3 className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">
+                      改正前全文
+                    </h3>
+                    <div className="rounded border border-zinc-200 dark:border-zinc-700 p-4 bg-zinc-50 dark:bg-zinc-800/50 max-h-80 overflow-y-auto">
+                      <pre className="whitespace-pre-wrap font-sans text-sm text-zinc-800 dark:text-zinc-200">
+                        {item.normSource.rawTextPrev}
+                      </pre>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <h3 className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">
+                      改正前全文
+                    </h3>
+                    <p className="text-xs text-zinc-400 dark:text-zinc-500 italic">
+                      （未取得）
+                    </p>
+                  </div>
+                )}
+              </div>
+            </section>
           )}
         </article>
       </div>

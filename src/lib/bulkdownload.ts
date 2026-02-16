@@ -2,10 +2,12 @@
  * e-Gov bulkdownload（日付指定・更新法令データ）の取得とパース
  * https://laws.e-gov.go.jp/bulkdownload?file_section=3&update_date={yyyyMMdd}&only_xml_flag=true
  * Issue #22, #23 対応
+ * Issue #24: ZIP 内 XML 本文の取り込み（NormSource.rawText）
  */
 import { gunzipSync } from "node:zlib";
 import AdmZip from "adm-zip";
 import iconv from "iconv-lite";
+import { XMLParser } from "fast-xml-parser";
 import { mapLawTypeToNormType } from "./egov-api";
 
 const BULKDOWNLOAD_URL =
@@ -153,7 +155,10 @@ export interface BulkdownloadRowFields {
   publishedAt: Date;
   effectiveAt: Date | null;
   url: string | null;
-  rawText: null;
+  /** 改正後全文（ZIP 内 XML から抽出。Issue #24） */
+  rawText: string | null;
+  /** ZIP ディレクトリ名の改正ID（{法令ID}_{日付}_{改正ID}）。Issue #25 で一つ前の revision 特定に使用 */
+  amendmentRevisionId?: string | null;
 }
 
 export function csvRowToNormSourceFields(
@@ -187,7 +192,58 @@ export function csvRowToNormSourceFields(
     effectiveAt: effectiveAt ?? null,
     url,
     rawText: null,
+    amendmentRevisionId: null,
   };
+}
+
+/** 法令標準 XML から条文テキストを再帰的に収集（#24） */
+function collectTextFromNode(node: unknown, out: string[]): void {
+  if (node == null) return;
+  if (typeof node === "string") {
+    const t = node.trim();
+    if (t) out.push(t);
+    return;
+  }
+  if (Array.isArray(node)) {
+    node.forEach((child) => collectTextFromNode(child, out));
+    return;
+  }
+  if (typeof node === "object") {
+    const obj = node as Record<string, unknown>;
+    if (obj["#text"] !== undefined) {
+      const t = String(obj["#text"]).trim();
+      if (t) out.push(t);
+    }
+    for (const key of Object.keys(obj)) {
+      if (key === "#text") continue;
+      collectTextFromNode(obj[key], out);
+    }
+  }
+}
+
+/**
+ * bulkdownload ZIP 内の法令 XML（Law/LawBody/本則・附則）から条文全文テキストを抽出（#24）
+ * 法令標準XMLスキーマに沿った LawBody 内の Article/Paragraph 等からテキストを集める
+ */
+export function parseLawXmlToRawText(xmlString: string): string {
+  const parser = new XMLParser({ ignoreDeclaration: true, ignoreAttributes: true });
+  let parsed: unknown;
+  try {
+    parsed = parser.parse(xmlString);
+  } catch {
+    return "";
+  }
+  if (parsed == null || typeof parsed !== "object") return "";
+  const law = (parsed as Record<string, unknown>)["Law"];
+  if (law == null || typeof law !== "object") return "";
+  const lawBody = (law as Record<string, unknown>)["LawBody"];
+  if (lawBody == null || typeof lawBody !== "object") return "";
+  const out: string[] = [];
+  const body = lawBody as Record<string, unknown>;
+  ["MainProvision", "SupplProvision", "Preamble", "EnactStatement"].forEach((key) => {
+    if (body[key]) collectTextFromNode(body[key], out);
+  });
+  return out.join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 /** yyyyMMdd から ZIP 内の CSV ファイル名（RyyMMdd.csv）を推測。令和年 = 西暦 - 2018 */
@@ -320,6 +376,34 @@ export async function fetchBulkdownloadList(
     const fields = csvRowToNormSourceFields(row, colIndex);
     if (fields) rows.push(fields);
   }
+
+  // #24: ZIP 内の法令別 XML から改正後全文（rawText）と改正ID（#25 用）を付与
+  const xmlByLawId: Record<string, { rawText: string; amendmentRevisionId: string }> = {};
+  for (const entry of entries) {
+    if (entry.isDirectory || !entry.entryName.endsWith(".xml")) continue;
+    const pathParts = entry.entryName.split("/");
+    const dirName = pathParts.length >= 2 ? pathParts[0] : entry.entryName.replace(/\.xml$/i, "");
+    const segs = dirName.split("_");
+    if (segs.length < 3) continue;
+    const [lawId, _date, ...revisionParts] = segs;
+    const amendmentRevisionId = revisionParts.join("_");
+    const xmlBuffer = entry.getData();
+    const xmlBuf = Buffer.isBuffer(xmlBuffer) ? xmlBuffer : Buffer.from(xmlBuffer);
+    let xmlText = xmlBuf.toString("utf-8");
+    if (!xmlText || (xmlText.charCodeAt(0) !== 0x3c && !xmlText.includes("<Law"))) {
+      xmlText = iconv.decode(xmlBuf, "cp932");
+    }
+    const rawText = parseLawXmlToRawText(xmlText);
+    if (lawId && (rawText || amendmentRevisionId)) {
+      xmlByLawId[lawId] = { rawText, amendmentRevisionId };
+    }
+  }
+  rows.forEach((r) => {
+    if (r.externalId && xmlByLawId[r.externalId]) {
+      r.rawText = xmlByLawId[r.externalId].rawText || null;
+      r.amendmentRevisionId = xmlByLawId[r.externalId].amendmentRevisionId || null;
+    }
+  });
 
   // 0件のときはサーバー側とブラウザ側で取得内容が違う可能性があるため、デバッグ用に先頭を返す
   if (rows.length === 0 && lines.length >= 2) {

@@ -1,6 +1,7 @@
 /**
  * bulkdownload の単体テスト＋取得試験（fetch モック）
  * Issue #22, #23 のパース・日付・列マッピングと、ZIP 取得〜行返却までの流れを検証する
+ * Issue #24: ZIP 内 XML 本文パース・rawText 付与のテスト
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import AdmZip from "adm-zip";
@@ -8,6 +9,7 @@ import iconv from "iconv-lite";
 import {
   csvRowToNormSourceFields,
   fetchBulkdownloadList,
+  parseLawXmlToRawText,
   type BulkdownloadRowFields,
 } from "./bulkdownload";
 
@@ -171,6 +173,37 @@ describe("csvRowToNormSourceFields", () => {
   });
 });
 
+// --- #24: 法令 XML から条文テキスト抽出 ---
+
+describe("parseLawXmlToRawText", () => {
+  it("Law/LawBody/MainProvision 内のテキストを抽出する", () => {
+    const xml = `<?xml version="1.0"?>
+<Law>
+  <LawBody>
+    <MainProvision>
+      <Article Num="1">
+        <Paragraph Num="1">第一条　この法律は、住民の住所に関する事項を定める。</Paragraph>
+      </Article>
+      <Article Num="2">
+        <Paragraph Num="1">第二条　市町村は、住民基本台帳を備える。</Paragraph>
+      </Article>
+    </MainProvision>
+  </LawBody>
+</Law>`;
+    const got = parseLawXmlToRawText(xml);
+    expect(got).toContain("第一条");
+    expect(got).toContain("住民の住所に関する事項を定める");
+    expect(got).toContain("第二条");
+    expect(got).toContain("住民基本台帳を備える");
+  });
+
+  it("空または不正な XML の場合は空文字を返す", () => {
+    expect(parseLawXmlToRawText("")).toBe("");
+    expect(parseLawXmlToRawText("<html></html>")).toBe("");
+    expect(parseLawXmlToRawText("not xml")).toBe("");
+  });
+});
+
 // --- 取得試験: fetch モックで ZIP を返し、解凍〜CSV パース〜行取得まで通す ---
 
 describe("fetchBulkdownloadList（取得試験・fetch モック）", () => {
@@ -280,4 +313,55 @@ describe("fetchBulkdownloadList（取得試験・fetch モック）", () => {
     expect(result.rows[0].externalId).toBe("342AC0000000081");
     expect(result.rows[0].title).toBe("住民基本台帳法");
   });
+
+  it("#24: ZIP に CSV と法令別 XML が含まれる場合、行に rawText と amendmentRevisionId が付与される", async () => {
+    const lawId = "342AC0000000081";
+    const revisionId = "507AC0000000032";
+    const dirName = `${lawId}_20260114_${revisionId}`;
+    const xmlContent = `<?xml version="1.0"?>
+<Law><LawBody>
+  <MainProvision>
+    <Article Num="1"><Paragraph Num="1">第一条　本文テキスト。</Paragraph></Article>
+  </MainProvision>
+</LawBody></Law>`;
+    const zip = new AdmZip();
+    zip.addFile(csvFileName, Buffer.from(csvUtf8, "utf-8"));
+    zip.addFile(`${dirName}/${dirName}.xml`, Buffer.from(xmlContent, "utf-8"));
+    const zipBuffer = zip.toBuffer();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => zipBuffer,
+      })
+    );
+    const result = await fetchBulkdownloadList(date);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.rows.length).toBeGreaterThanOrEqual(1);
+    const row = result.rows[0];
+    expect(row.externalId).toBe(lawId);
+    expect(row.rawText).toContain("第一条");
+    expect(row.rawText).toContain("本文テキスト");
+    expect(row.amendmentRevisionId).toBe(revisionId);
+  });
+});
+
+// --- 実際のデータを使った取得試験（オプション: 手動で有効化） ---
+// 環境変数 RUN_BULKDOWNLOAD_E2E=1 で e-Gov bulkdownload に実際にリクエストし、
+// ZIP 解凍・CSV/XML パース・rawText 付与まで通ることを確認する。
+const runE2E = process.env.RUN_BULKDOWNLOAD_E2E === "1";
+describe.skipIf(!runE2E)("fetchBulkdownloadList（実データ取得・e-Gov に接続）", () => {
+  it("過去日付で bulkdownload を取得し、行と rawText が返る", async () => {
+    const date = "20230201";
+    const result = await fetchBulkdownloadList(date);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.error);
+    expect(result.rows.length).toBeGreaterThanOrEqual(0);
+    if (result.rows.length > 0 && result.rows[0].rawText) {
+      expect(result.rows[0].rawText.length).toBeGreaterThan(0);
+    }
+  }, 60_000);
 });
