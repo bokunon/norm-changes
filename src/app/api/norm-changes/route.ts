@@ -1,9 +1,11 @@
 /**
- * NormChange 一覧取得（フィルタ: 公示日・施行日・種別・タグ）
- * GET /api/norm-changes?from=yyyyMMdd&to=yyyyMMdd&type=LAW&tagId=xxx
+ * NormChange 一覧取得（フィルタ: 公示日・施行日・種別・タグ・リスク3軸）
+ * GET /api/norm-changes?from=yyyyMMdd&to=yyyyMMdd&type=LAW&tagId=xxx&risk=survival,financial,credit
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+
+const RISK_VALUES = ["survival", "financial", "credit"] as const;
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -11,6 +13,7 @@ export async function GET(request: Request) {
   const to = searchParams.get("to");
   const type = searchParams.get("type");
   const tagId = searchParams.get("tagId");
+  const riskParam = searchParams.get("risk");
   const limit = Math.min(Number(searchParams.get("limit")) || 50, 100);
 
   const normSourceWhere: { publishedAt?: { gte?: Date; lte?: Date }; type?: string } = {};
@@ -24,15 +27,27 @@ export async function GET(request: Request) {
   }
   if (type) normSourceWhere.type = type;
 
+  const riskFilters = riskParam
+    ? riskParam.split(",").filter((r) => RISK_VALUES.includes(r as (typeof RISK_VALUES)[number]))
+    : [];
+
   const where: {
     normSource?: { publishedAt?: { gte?: Date; lte?: Date }; type?: string };
     tags?: { some: { tagId: string } };
+    OR?: { riskSurvival?: boolean; riskFinancial?: boolean; riskCredit?: boolean }[];
   } = {};
   if (Object.keys(normSourceWhere).length > 0) {
     where.normSource = normSourceWhere;
   }
   if (tagId) {
     where.tags = { some: { tagId } };
+  }
+  if (riskFilters.length > 0) {
+    where.OR = riskFilters.map((r) => {
+      if (r === "survival") return { riskSurvival: true };
+      if (r === "financial") return { riskFinancial: true };
+      return { riskCredit: true };
+    });
   }
 
   const items = await prisma.normChange.findMany({
@@ -53,6 +68,9 @@ export async function GET(request: Request) {
       summary: i.summary,
       obligationLevel: i.obligationLevel,
       penaltyRisk: i.penaltyRisk,
+      riskSurvival: i.riskSurvival,
+      riskFinancial: i.riskFinancial,
+      riskCredit: i.riskCredit,
       penaltyDetail: i.penaltyDetail,
       effectiveFrom: i.effectiveFrom?.toISOString() ?? null,
       deadline: i.deadline?.toISOString() ?? null,

@@ -8,6 +8,9 @@ type NormChangeItem = {
   summary: string;
   obligationLevel: string;
   penaltyRisk: string;
+  riskSurvival: boolean;
+  riskFinancial: boolean;
+  riskCredit: boolean;
   penaltyDetail: string | null;
   effectiveFrom: string | null;
   normSource: {
@@ -22,16 +25,24 @@ type NormChangeItem = {
   tags: { id: string; key: string; labelJa: string; type: string }[];
 };
 
+const RISK_LABELS: { key: "survival" | "financial" | "credit"; label: string }[] = [
+  { key: "survival", label: "生存" },
+  { key: "financial", label: "金銭" },
+  { key: "credit", label: "信用" },
+];
+
 export default function NormChangesPage() {
   const [items, setItems] = useState<NormChangeItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [riskFilter, setRiskFilter] = useState<("survival" | "financial" | "credit")[]>([]);
 
   useEffect(() => {
     const params = new URLSearchParams();
     if (from) params.set("from", from.replace(/-/g, ""));
     if (to) params.set("to", to.replace(/-/g, ""));
+    if (riskFilter.length > 0) params.set("risk", riskFilter.join(","));
     setLoading(true);
     fetch(`/api/norm-changes?${params.toString()}`)
       .then((r) => r.json())
@@ -40,7 +51,7 @@ export default function NormChangesPage() {
         else setItems([]);
       })
       .finally(() => setLoading(false));
-  }, [from, to]);
+  }, [from, to, riskFilter]);
 
   const formatDate = (iso: string | null) =>
     iso ? new Date(iso).toLocaleDateString("ja-JP") : "—";
@@ -78,6 +89,24 @@ export default function NormChangesPage() {
               className="border rounded px-2 py-1 dark:bg-zinc-800 dark:border-zinc-600"
             />
           </label>
+          <fieldset className="flex flex-wrap items-center gap-2 text-sm">
+            <legend className="sr-only">リスクで絞り込み</legend>
+            {RISK_LABELS.map(({ key, label }) => (
+              <label key={key} className="flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  checked={riskFilter.includes(key)}
+                  onChange={(e) => {
+                    setRiskFilter((prev) =>
+                      e.target.checked ? [...prev, key] : prev.filter((r) => r !== key)
+                    );
+                  }}
+                  className="rounded border-zinc-400"
+                />
+                {label}
+              </label>
+            ))}
+          </fieldset>
         </div>
         {loading ? (
           <p className="text-zinc-500">読み込み中…</p>
@@ -98,17 +127,25 @@ export default function NormChangesPage() {
                     {item.summary}
                   </p>
                   <div className="flex flex-wrap gap-2 text-xs">
-                    <span
-                      className={
-                        item.penaltyRisk === "HIGH"
-                          ? "text-red-600 dark:text-red-400"
-                          : "text-zinc-500"
-                      }
-                    >
-                      {item.penaltyRisk !== "NONE"
-                        ? `リスク: ${item.penaltyRisk}`
-                        : ""}
-                    </span>
+                    {(item.riskSurvival || item.riskFinancial || item.riskCredit) && (
+                      <span className="flex flex-wrap gap-1">
+                        {item.riskSurvival && (
+                          <span className="rounded bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 text-amber-800 dark:text-amber-200">
+                            生存
+                          </span>
+                        )}
+                        {item.riskFinancial && (
+                          <span className="rounded bg-red-100 dark:bg-red-900/40 px-1.5 py-0.5 text-red-800 dark:text-red-200">
+                            金銭
+                          </span>
+                        )}
+                        {item.riskCredit && (
+                          <span className="rounded bg-sky-100 dark:bg-sky-900/40 px-1.5 py-0.5 text-sky-800 dark:text-sky-200">
+                            信用
+                          </span>
+                        )}
+                      </span>
+                    )}
                     <span className="text-zinc-400">
                       {item.normSource?.type} · 公示日:{" "}
                       {formatDate(item.normSource?.publishedAt ?? null)}

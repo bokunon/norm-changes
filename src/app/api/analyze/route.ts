@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import {
   detectPenaltyRisk,
   detectObligationLevel,
+  detectRiskTypes,
   buildSummary,
 } from "@/lib/analyze";
 import { notifySlack } from "@/lib/slack";
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
     const text = src.rawText ?? src.title;
     const penaltyRisk = detectPenaltyRisk(text);
     const obligationLevel = detectObligationLevel(text);
+    const riskTypes = detectRiskTypes(text);
     const summary = buildSummary(src.title, src.rawText);
 
     const change = await prisma.normChange.create({
@@ -39,6 +41,9 @@ export async function POST(request: Request) {
         obligationLevel,
         penaltyRisk,
         penaltyDetail: penaltyRisk !== "NONE" ? "罰則・義務規定の可能性（要確認）" : null,
+        riskSurvival: riskTypes.survival,
+        riskFinancial: riskTypes.financial,
+        riskCredit: riskTypes.credit,
         effectiveFrom: src.effectiveAt ?? null,
         deadline: null,
       },

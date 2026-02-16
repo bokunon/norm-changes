@@ -9,6 +9,9 @@ type Detail = {
   summary: string;
   obligationLevel: string;
   penaltyRisk: string;
+  riskSurvival: boolean;
+  riskFinancial: boolean;
+  riskCredit: boolean;
   penaltyDetail: string | null;
   effectiveFrom: string | null;
   deadline: string | null;
@@ -107,6 +110,28 @@ export default function NormChangeDetailPage() {
                 {item.penaltyDetail ? ` — ${item.penaltyDetail}` : ""}
               </dd>
             </div>
+            {(item.riskSurvival || item.riskFinancial || item.riskCredit) && (
+              <div>
+                <dt className="text-zinc-500">リスク（3軸）</dt>
+                <dd className="flex flex-wrap gap-2 mt-1">
+                  {item.riskSurvival && (
+                    <span className="rounded bg-amber-100 dark:bg-amber-900/40 px-2 py-1 text-sm text-amber-800 dark:text-amber-200">
+                      生存リスク（業務停止・免許取消等）
+                    </span>
+                  )}
+                  {item.riskFinancial && (
+                    <span className="rounded bg-red-100 dark:bg-red-900/40 px-2 py-1 text-sm text-red-800 dark:text-red-200">
+                      金銭リスク（罰金・課徴金等）
+                    </span>
+                  )}
+                  {item.riskCredit && (
+                    <span className="rounded bg-sky-100 dark:bg-sky-900/40 px-2 py-1 text-sm text-sky-800 dark:text-sky-200">
+                      信用リスク（社名公表・勧告等）
+                    </span>
+                  )}
+                </dd>
+              </div>
+            )}
             {item.tags.length > 0 && (
               <div>
                 <dt className="text-zinc-500">タグ</dt>

@@ -35,8 +35,12 @@ model NormChange {
   normSourceId     String
   summary          String    @db.Text
   obligationLevel  String    // MUST, SHOULD, INFO
-  penaltyRisk      String    // HIGH, MID, LOW, NONE
+  penaltyRisk      String    // HIGH, MID, LOW, NONE（後方互換）
   penaltyDetail    String?   @db.Text
+  // Issue #16/#19: 3軸リスク（生存・金銭・信用）
+  riskSurvival     Boolean   @default(false) // 業務停止・免許取消等
+  riskFinancial    Boolean   @default(false) // 罰金・課徴金等
+  riskCredit       Boolean   @default(false) // 社名公表・勧告等
   effectiveFrom    DateTime?
   deadline         DateTime?
   createdAt        DateTime  @default(now())
