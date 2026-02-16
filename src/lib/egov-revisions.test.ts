@@ -21,8 +21,8 @@ describe("fetchLawRevisions", () => {
         text: async () =>
           JSON.stringify({
             revisions: [
-              { revision_id: "rev1", date: "20250101" },
-              { revision_id: "rev2", date: "20260214" },
+              { law_revision_id: "id1", amendment_law_id: "rev1" },
+              { law_revision_id: "id2", amendment_law_id: "rev2" },
             ],
           }),
       })
@@ -31,7 +31,7 @@ describe("fetchLawRevisions", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.revisions).toHaveLength(2);
-    expect(result.revisions[0].revision_id).toBe("rev1");
+    expect(result.revisions[0].law_revision_id).toBe("id1");
   });
 
   it("API が 404 の場合は ok: false を返す", async () => {
@@ -52,6 +52,30 @@ describe("fetchLawRevisions", () => {
 
 describe("fetchLawData", () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it("JSON の law_full_text（tag/children）から条文テキストを抽出する", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        headers: new Headers({ "content-type": "application/json" }),
+        text: async () =>
+          JSON.stringify({
+            law_full_text: {
+              tag: "Law",
+              children: [
+                { tag: "LawBody", children: [{ tag: "Article", children: ["第一条", "本文"] }] },
+              ],
+            },
+          }),
+      })
+    );
+    const result = await fetchLawData("335CO0000000260_20230401_504CO0000000365");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.rawText).toContain("第一条");
+    expect(result.rawText).toContain("本文");
+  });
 
   it("XML 本文が返る場合に parseLawXmlToRawText でテキストを返す", async () => {
     const xml = `<Law><LawBody><MainProvision><Article><Paragraph>条文本文</Paragraph></Article></MainProvision></LawBody></Law>`;
@@ -82,8 +106,8 @@ describe("fetchPreviousRevisionRawText", () => {
             text: async () =>
               JSON.stringify({
                 revisions: [
-                  { revision_id: "prevRev", date: "20240101" },
-                  { revision_id: "currentRev", date: "20260214" },
+                  { law_revision_id: "lawId_20260214_currentRev", amendment_law_id: "currentRev" },
+                  { law_revision_id: "lawId_20240101_prevRev", amendment_law_id: "prevRev" },
                 ],
               }),
           };
@@ -91,9 +115,14 @@ describe("fetchPreviousRevisionRawText", () => {
         if (url.includes("law_data")) {
           return {
             ok: true,
-            headers: new Headers({ "content-type": "application/xml" }),
+            headers: new Headers({ "content-type": "application/json" }),
             text: async () =>
-              "<Law><LawBody><MainProvision><Article><Paragraph>改正前の条文</Paragraph></Article></MainProvision></LawBody></Law>",
+              JSON.stringify({
+                law_full_text: {
+                  tag: "Law",
+                  children: [{ tag: "LawBody", children: ["改正前の条文"] }],
+                },
+              }),
           };
         }
         return { ok: false, status: 404, text: async () => "Not Found" };
@@ -102,19 +131,23 @@ describe("fetchPreviousRevisionRawText", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it("現在の revision の一つ前の全文を取得する", async () => {
+  it("現在の revision（配列先頭）の一つ前（配列2番目）の全文を取得する", async () => {
     const text = await fetchPreviousRevisionRawText("342AC0000000081", "currentRev");
     expect(text).toContain("改正前の条文");
   });
 
-  it("現在の revision が先頭の場合は null を返す", async () => {
+  it("現在の revision が配列の最後（最も古い）の場合は null を返す", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
         headers: new Headers({ "content-type": "application/json" }),
         text: async () =>
-          JSON.stringify({ revisions: [{ revision_id: "onlyOne", date: "20260214" }] }),
+          JSON.stringify({
+            revisions: [
+              { law_revision_id: "onlyOne", amendment_law_id: "onlyOne" },
+            ],
+          }),
       })
     );
     const text = await fetchPreviousRevisionRawText("342AC0000000081", "onlyOne");

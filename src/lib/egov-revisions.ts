@@ -1,7 +1,8 @@
 /**
  * e-Gov 法令API v2: 改正履歴（law_revisions）と法令本文（law_data）で改正前全文を取得
  * Issue #25
- * 参照: https://laws.e-gov.go.jp/api/2/swagger-ui
+ * 実仕様: GET /api/2/law_revisions/{lawId} → { revisions: [{ law_revision_id, amendment_law_id, ... }] }（新しい順）
+ *         GET /api/2/law_data/{law_revision_id} → { law_full_text: { tag, children: [...] } }（JSON）
  */
 import { XMLParser } from "fast-xml-parser";
 import { parseLawXmlToRawText } from "./bulkdownload";
@@ -14,12 +15,13 @@ const DEFAULT_HEADERS = {
   Accept: "application/json, application/xml, */*",
 };
 
-/** law_revisions の 1 件（仕様に合わせて調整する） */
+/** law_revisions の 1 件（API v2 実レスポンス） */
 interface RevisionItem {
+  law_revision_id?: string;
+  amendment_law_id?: string;
+  /** 後方互換・XML 用 */
   revision_id?: string;
   RevisionId?: string;
-  law_id?: string;
-  /** その他の識別子 */
   [key: string]: unknown;
 }
 
@@ -40,8 +42,8 @@ export async function fetchLawRevisions(
     const contentType = res.headers.get("content-type") ?? "";
     const text = await res.text();
     if (contentType.includes("application/json")) {
-      const data = JSON.parse(text) as unknown;
-      const list = Array.isArray(data) ? data : (data as Record<string, unknown>).revisions ?? (data as Record<string, unknown>).Revisions ?? (data as Record<string, unknown>).items;
+      const data = JSON.parse(text) as Record<string, unknown>;
+      const list = data.revisions ?? data.Revisions ?? data.items;
       const revisions = Array.isArray(list) ? (list as RevisionItem[]) : [];
       return { ok: true, revisions };
     }
@@ -70,10 +72,10 @@ function extractRevisionsFromXml(parsed: Record<string, unknown>): RevisionItem[
     }
     if (typeof obj === "object") {
       const o = obj as Record<string, unknown>;
-      if (o["RevisionId"] != null || o["revision_id"] != null) {
+      if (o["law_revision_id"] != null || o["RevisionId"] != null || o["revision_id"] != null) {
         out.push({
-          revision_id: String(o["revision_id"] ?? o["RevisionId"] ?? ""),
-          RevisionId: String(o["RevisionId"] ?? o["revision_id"] ?? ""),
+          law_revision_id: String(o["law_revision_id"] ?? o["RevisionId"] ?? o["revision_id"] ?? ""),
+          amendment_law_id: String(o["amendment_law_id"] ?? o["AmendmentId"] ?? ""),
           ...o,
         });
         return;
@@ -82,6 +84,28 @@ function extractRevisionsFromXml(parsed: Record<string, unknown>): RevisionItem[
     }
   }
   walk(parsed);
+  return out;
+}
+
+/** API v2 law_data の law_full_text（tag/children 木）から条文テキストを再帰的に抽出 */
+function extractTextFromLawFullText(node: unknown): string[] {
+  const out: string[] = [];
+  if (node == null) return out;
+  if (typeof node === "string") {
+    const t = node.trim();
+    if (t) out.push(t);
+    return out;
+  }
+  if (Array.isArray(node)) {
+    node.forEach((child) => out.push(...extractTextFromLawFullText(child)));
+    return out;
+  }
+  if (typeof node === "object") {
+    const o = node as Record<string, unknown>;
+    const children = o.children ?? o.Children;
+    if (children != null) out.push(...extractTextFromLawFullText(children));
+    return out;
+  }
   return out;
 }
 
@@ -103,6 +127,11 @@ export async function fetchLawData(
     const text = await res.text();
     if (contentType.includes("application/json")) {
       const data = JSON.parse(text) as Record<string, unknown>;
+      const lawFullText = data.law_full_text ?? data.LawFullText;
+      if (lawFullText != null && typeof lawFullText === "object") {
+        const parts = extractTextFromLawFullText(lawFullText);
+        return { ok: true, rawText: parts.join("\n\n").replace(/\n{3,}/g, "\n\n").trim() };
+      }
       const body = (data.body ?? data.rawText ?? data.content ?? data.Body ?? "") as string;
       return { ok: true, rawText: typeof body === "string" ? body : "" };
     }
@@ -121,8 +150,9 @@ export async function fetchLawData(
 
 /**
  * ZIP で得た「現在の改正」を基準に、一つ前の revision の全文を取得（#25）
+ * API v2 の revisions は新しい順のため、「一つ前」= 配列の次の要素（index+1）
  * @param lawId 法令ID
- * @param currentAmendmentRevisionId ZIP ディレクトリ名の改正ID（{法令ID}_{日付}_{改正ID} の第3部分）
+ * @param currentAmendmentRevisionId ZIP の改正ID（amendment_law_id。例: 506CO0000000390）
  */
 export async function fetchPreviousRevisionRawText(
   lawId: string,
@@ -132,12 +162,18 @@ export async function fetchPreviousRevisionRawText(
   if (!revResult.ok) return null;
   const { revisions } = revResult;
   const idKey = (r: RevisionItem) =>
-    (r.revision_id ?? r.RevisionId ?? (r as Record<string, unknown>).AmendmentId ?? "").toString();
+    (r.law_revision_id ?? r.revision_id ?? r.RevisionId ?? "").toString();
+  const amendmentId = (r: RevisionItem) =>
+    (r.amendment_law_id ?? (r as Record<string, unknown>).AmendmentId ?? "").toString();
   const currentIndex = revisions.findIndex(
-    (r) => idKey(r) === currentAmendmentRevisionId || idKey(r).endsWith(currentAmendmentRevisionId)
+    (r) =>
+      amendmentId(r) === currentAmendmentRevisionId ||
+      idKey(r).endsWith("_" + currentAmendmentRevisionId)
   );
-  if (currentIndex <= 0) return null;
-  const prevRevision = revisions[currentIndex - 1];
+  if (currentIndex < 0) return null;
+  const nextIndex = currentIndex + 1;
+  if (nextIndex >= revisions.length) return null;
+  const prevRevision = revisions[nextIndex];
   const prevId = idKey(prevRevision);
   if (!prevId) return null;
   const dataResult = await fetchLawData(prevId);
