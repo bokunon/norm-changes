@@ -17,10 +17,12 @@ export async function GET(request: Request) {
 
   const result = await fetchUpdateLawList(yyyyMMdd);
   if (!result.ok || !result.data) {
-    return NextResponse.json(
-      { ok: false, error: result.error ?? "取得に失敗しました" },
-      { status: 400 }
-    );
+    // ブラウザで開いてもエラー内容が見えるよう 200 で JSON を返す
+    return NextResponse.json({
+      ok: false,
+      error: result.error ?? "取得に失敗しました",
+      hint: "e-Gov API の障害や日付指定（yyyyMMdd）の誤り、XML形式変更の可能性があります。",
+    });
   }
 
   const list = result.data.LawNameListInfo;

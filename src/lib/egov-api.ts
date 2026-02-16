@@ -31,11 +31,12 @@ export interface UpdateLawListResponse {
   LawNameListInfo: LawNameListInfo | LawNameListInfo[];
 }
 
-function parseDate(yyyyMMdd: string): Date {
-  if (!/^\d{8}$/.test(yyyyMMdd)) return new Date(0);
-  const y = yyyyMMdd.slice(0, 4);
-  const m = yyyyMMdd.slice(4, 6);
-  const d = yyyyMMdd.slice(6, 8);
+function parseDate(yyyyMMdd: string | number | undefined): Date {
+  const s = String(yyyyMMdd ?? "");
+  if (!/^\d{8}$/.test(s)) return new Date(0);
+  const y = s.slice(0, 4);
+  const m = s.slice(4, 6);
+  const d = s.slice(6, 8);
   return new Date(`${y}-${m}-${d}T00:00:00Z`);
 }
 
@@ -48,16 +49,18 @@ function parseUpdateLawListXml(xml: string): { code: string; data: UpdateLawList
     isArray: (name) => name === "LawNameListInfo",
   });
   const raw = parser.parse(xml);
-  const dataRoot = raw?.DataRoot;
-  if (!dataRoot?.ApplData) return null;
-  const code = dataRoot.Result?.Code ?? "1";
-  const appl = dataRoot.ApplData;
-  const list = appl.LawNameListInfo;
+  const dataRoot = raw?.DataRoot ?? raw?.dataroot;
+  if (!dataRoot) return null;
+  const result = dataRoot.Result ?? dataRoot.result;
+  const code = result?.Code ?? result?.code ?? "1";
+  const appl = dataRoot.ApplData ?? dataRoot.applData;
+  if (!appl) return null;
+  const list = appl.LawNameListInfo ?? appl.lawNameListInfo;
   const arr = Array.isArray(list) ? list : list ? [list] : [];
   return {
-    code,
+    code: String(code),
     data: {
-      Date: appl.Date ?? "",
+      Date: appl.Date ?? appl.date ?? "",
       LawNameListInfo: arr,
     },
   };
@@ -106,8 +109,8 @@ export function mapLawTypeToNormType(lawTypeName: string): string {
 }
 
 export function lawInfoToNormSourceFields(info: LawNameListInfo) {
-  const publishedAt = parseDate(info.PromulgationDate);
-  const effectiveAt = info.EnforcementDate ? parseDate(info.EnforcementDate) : null;
+  const publishedAt = parseDate(info.PromulgationDate ?? "");
+  const effectiveAt = info.EnforcementDate != null ? parseDate(info.EnforcementDate) : null;
   return {
     externalId: info.LawId,
     type: mapLawTypeToNormType(info.LawTypeName ?? ""),

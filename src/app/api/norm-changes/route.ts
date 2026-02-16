@@ -67,7 +67,7 @@ export async function GET(request: Request) {
             url: i.normSource.url,
           }
         : null,
-      tags: i.tags.map((t) => t.tag),
+      tags: i.tags.map((rel: { tag: { id: string; type: string; key: string; labelJa: string; description: string | null } }) => rel.tag),
     })),
   });
 }

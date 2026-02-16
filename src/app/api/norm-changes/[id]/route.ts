@@ -47,7 +47,7 @@ export async function GET(
             rawText: change.normSource.rawText,
           }
         : null,
-      tags: change.tags.map((t) => t.tag),
+      tags: change.tags.map((rel: { tag: { id: string; type: string; key: string; labelJa: string; description: string | null } }) => rel.tag),
     },
   });
 }

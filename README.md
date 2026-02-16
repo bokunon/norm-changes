@@ -5,11 +5,17 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 ## ドキュメント
 
 - **[アーキテクチャ概要](docs/architecture.md)** — 全体構成（コンテキスト図）、データ構造（ER図）、環境構成案。実装チケットはここを参照。
+- **[Supabase 作成〜接続ハンズオン](docs/supabase-setup.md)** — プロジェクト作成から .env 設定・マイグレーションまで手順付き。
 
 ## 初回セットアップ
 
 1. `.env.example` をコピーして `.env` を作成し、`DATABASE_URL` を設定する。
 2. DB にマイグレーションを適用する。
+   - **Supabase 利用時**:
+     - **Transaction mode プーラー（port 6543）**のままだと `prepared statement "s1" already exists` が出ます。
+     - 次のどちらかを `.env` の `DIRECT_DATABASE_URL` に設定してから実行してください。
+       1. **Direct connection**（`db.xxx.supabase.co:5432`）— デフォルトは **IPv6 のみ**。自宅など IPv4 だけの環境ではつながらないことがあります。
+       2. **Session mode プーラー**（`aws-0-xxx.pooler.supabase.com:5432`）— **IPv4 対応**。ダッシュボードの「Connect」→「Session」で URI をコピー。ユーザー名は `postgres.[PROJECT_REF]` 形式です。
    ```bash
    npx prisma migrate deploy
    ```
