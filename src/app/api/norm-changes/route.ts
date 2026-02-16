@@ -45,9 +45,10 @@ export async function GET(request: Request) {
     take: limit,
   });
 
+  type Item = (typeof items)[number];
   return NextResponse.json({
     ok: true,
-    items: items.map((i) => ({
+    items: items.map((i: Item) => ({
       id: i.id,
       summary: i.summary,
       obligationLevel: i.obligationLevel,
