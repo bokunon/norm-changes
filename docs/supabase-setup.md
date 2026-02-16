@@ -2,6 +2,8 @@
 
 このドキュメントに沿って、Supabase を新規作成し、このアプリから接続・マイグレーションまで行います。
 
+**Issue #26**: 接続文字列（パスワード含む）をそのまま `DATABASE_URL` / `DIRECT_DATABASE_URL` に設定する形式です。`DB_PASSWORD` 変数は使いません。
+
 ---
 
 ## 1. Supabase のプロジェクトを作成する
@@ -20,32 +22,30 @@
 
 プロジェクトができたら、**2 種類の接続文字列**を取ります。
 
-### 2-1. 接続文字列のひな形を取得する
+### 2-1. 接続文字列を取得する
 
 1. 左メニュー **「Project Settings」**（歯車）→ **「Database」**。
 2. 下の方の **「Connection string」** で **「URI」** タブを選ぶ。
-3. **「Transaction」**（6543）と **「Session」**（5432）の 2 つを、それぞれコピーしておく。  
-   例（Transaction）: `postgresql://postgres.[PROJECT_REF]:[YOUR-PASSWORD]@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres`  
-   例（Session）: `postgresql://postgres.[PROJECT_REF]:[YOUR-PASSWORD]@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres`
+3. **「Transaction」**（6543）と **「Session」**（5432）の 2 つを、それぞれ **「Copy」** でコピーする。  
+   パスワード `[YOUR-PASSWORD]` の部分を、Supabase で設定した **Database Password** に置き換えた状態でコピーする（またはコピー後に手で置換する）。
+4. 必要なら末尾に `?schema=public` を付ける（Supabase の URI に含まれていない場合）。
 
-**パスワードはここでは置き換えません。** 次の .env で 1 箇所だけ書きます。
+例（Transaction）: `postgresql://postgres.[PROJECT_REF]:[YOUR-PASSWORD]@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres?schema=public`  
+例（Session）: `postgresql://postgres.[PROJECT_REF]:[YOUR-PASSWORD]@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres?schema=public`
 
 ---
 
-## 3. このリポジトリの .env を設定する（パスワードだけ編集）
+## 3. このリポジトリの .env を設定する（接続文字列をそのまま貼る）
 
 1. **`.env.example`** をコピーして **`.env`** を作成する。
-2. **`.env`** を開き、**`DB_PASSWORD=""`** の `""` のあいだに、Supabase で設定した **Database Password** を 1 つだけ書く。
-3. それ以外の行（`DATABASE_URL` / `DIRECT_DATABASE_URL`）は **編集しない**。接続文字列にはすでに `?schema=public` と `${DB_PASSWORD}` が入っています。
+2. **`.env`** を開き、**`DATABASE_URL`** と **`DIRECT_DATABASE_URL`** に、上で取得した **接続文字列をそのまま**貼り付ける（パスワードはすでに含めた完全な文字列）。
 
 ```env
-DB_PASSWORD="ここにパスワードを書く"
-
-DATABASE_URL="postgresql://postgres.wzkjnmowrlfgvkuzyiio:${DB_PASSWORD}@..."
-DIRECT_DATABASE_URL="postgresql://postgres.wzkjnmowrlfgvkuzyiio:${DB_PASSWORD}@..."
+DATABASE_URL="postgresql://postgres.xxxx:あなたのパスワード@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres?schema=public"
+DIRECT_DATABASE_URL="postgresql://postgres.xxxx:あなたのパスワード@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres?schema=public"
 ```
 
-パスワードに `@` や `#` が含まれる場合は、その部分だけ URL エンコード（`@` → `%40`、`#` → `%23`）してから `DB_PASSWORD` に書く。
+パスワードに `@` や `#` が含まれる場合は、その部分だけ URL エンコード（`@` → `%40`、`#` → `%23`）してから接続文字列に含める。
 
 保存したら、次のコマンドで接続確認（アプリ経由）:
 

@@ -20,7 +20,8 @@
 ### 3. 「Tenant or user not found」
 
 - **原因**: `.env` の **${DB_PASSWORD}** が Next.js 側で展開されず、接続文字列のパスワードがリテラル `"${DB_PASSWORD}"` のまま DB に送られていた（Supabase 側から見ると「不正なユーザー」）。
-- **対処**: **instrumentation** で起動時に dotenv-expand を実行し、パスワードを 1 箇所（DB_PASSWORD）に書いても接続文字列で展開されるようにした。
+- **当時の対処**: **instrumentation** で起動時に dotenv-expand を実行し、パスワードを 1 箇所（DB_PASSWORD）に書いても接続文字列で展開されるようにした。
+- **現在（Issue #26 対応後）**: 接続文字列（パスワード含む）をそのまま `DATABASE_URL` / `DIRECT_DATABASE_URL` に設定する方式に変更済み。`DB_PASSWORD` と dotenv-expand は廃止。
 
 ### 4. 接続文字列の P1013・「scheme is not recognized」
 
@@ -62,7 +63,7 @@ Supabase の料金は次のとおりです。
 
 - **DATABASE_URL**: アプリ用。Transaction mode（6543）。
 - **DIRECT_DATABASE_URL**: マイグレーション用。**Session mode（5432）** を明示的に設定（IPv4 で使うため Direct ではなく Session を選んだ）。
-- **instrumentation**: `${DB_PASSWORD}` を確実に展開。
+- **instrumentation**: 当時は `${DB_PASSWORD}` を確実に展開。現在は接続文字列をそのまま読むのみ（Issue #26）。
 - **postinstall**: Vercel などで `prisma generate` を実行。
 
 Pro ＋ IPv4 にしていれば、「Direct を IPv4 で 1 本用意してマイグレーションに使う」だけで、**Session mode を意識して 2 種類のプーラー URL を理解・設定する手間**はかなり減っていた、という整理になります。
