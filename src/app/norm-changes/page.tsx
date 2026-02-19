@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getNormTypeLabelJa } from "@/lib/norm-types";
-import { getMostSevereRiskShort } from "@/lib/risk-display";
+import { getMostSevereRiskShort, stripObligationAndLevelFromSummary } from "@/lib/risk-display";
 
 type NormChangeItem = {
   id: string;
@@ -207,7 +207,7 @@ export default function NormChangesPage() {
                       {item.normSource?.title ?? item.summary.slice(0, 60)}
                     </h2>
                     <p className="text-sm text-zinc-600 dark:text-zinc-400 line-clamp-2 mb-2">
-                      {item.summary}
+                      {stripObligationAndLevelFromSummary(item.summary) || item.summary}
                     </p>
                     <div className="flex flex-wrap gap-2 text-xs">
                       <span className="text-zinc-400">

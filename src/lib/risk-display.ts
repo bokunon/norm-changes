@@ -67,15 +67,37 @@ export function getMostSevereRiskShort(item: RiskFlags): (RiskDisplay & { label:
   return null;
 }
 
+/** 程度・義務レベルのプレフィックス用（半角・全角ハイフン・コロン対応）。g なしで先頭1件ずつ除去 */
+const LEVEL_PREFIX =
+  /^(HIGH|MID|LOW|NONE|MUST|SHOULD|INFO)\s*[-–—－:\s：]+\s*/i;
+
 /**
  * リスク詳細（penaltyDetail）の先頭にある程度・義務レベルの表記を除去する。
- * AI が "MID- 〜" "SHOULD 〜" などを返すことがあるため、表示用にクリーンにする。
+ * AI が "MID- 〜" "HIGH- 〜" "SHOULD 〜" などを返すことがあるため、表示用にクリーンにする。
  */
 export function stripRiskLevelFromPenaltyDetail(text: string | null | undefined): string {
   if (!text || typeof text !== "string") return "";
   let s = text.trim();
-  // 先頭の "HIGH-", "MID-", "LOW-", "NONE-", "MUST ", "SHOULD ", "INFO " 等を除去（ハイフン・スペース・コロン付き）
-  const prefix = /^(HIGH|MID|LOW|NONE|MUST|SHOULD|INFO)\s*[-–—:\s]+\s*/i;
-  while (prefix.test(s)) s = s.replace(prefix, "").trim();
+  while (LEVEL_PREFIX.test(s)) {
+    s = s.replace(LEVEL_PREFIX, "").trim();
+  }
+  return s;
+}
+
+/**
+ * 概要・サマリ表示用: 「対応重要度 SHOULD」や「MID-」「HIGH-」などを除去する。
+ * 一覧・詳細で summary / reportSummary を表示する前に使う。
+ */
+export function stripObligationAndLevelFromSummary(text: string | null | undefined): string {
+  if (!text || typeof text !== "string") return "";
+  let s = text.trim();
+  // 「対応重要度」「対応重要度:」「対応重要度 SHOULD」などを除去
+  s = s.replace(/^対応重要度\s*[：:]\s*/, "").trim();
+  s = s.replace(/^対応重要度\s+(MUST|SHOULD|INFO)\s*/i, "").trim();
+  s = s.replace(/^(MUST|SHOULD|INFO)\s*[：:]\s*/i, "").trim();
+  // 先頭の程度・義務レベル表記を除去
+  while (LEVEL_PREFIX.test(s)) {
+    s = s.replace(LEVEL_PREFIX, "").trim();
+  }
   return s;
 }

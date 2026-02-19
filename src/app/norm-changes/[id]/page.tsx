@@ -4,7 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { getNormTypeLabelJa } from "@/lib/norm-types";
-import { getMostSevereRisk, stripRiskLevelFromPenaltyDetail } from "@/lib/risk-display";
+import {
+  getMostSevereRisk,
+  stripRiskLevelFromPenaltyDetail,
+  stripObligationAndLevelFromSummary,
+} from "@/lib/risk-display";
 
 type Detail = {
   id: string;
@@ -178,7 +182,7 @@ export default function NormChangeDetailPage() {
               <div className="space-y-4">
                 {item.reportSummary && (
                   <p className="whitespace-pre-wrap text-zinc-800 dark:text-zinc-200">
-                    {item.reportSummary}
+                    {stripObligationAndLevelFromSummary(item.reportSummary) || item.reportSummary}
                   </p>
                 )}
                 {/* Issue #37: 上＝取るべきアクション（ポイントのみ）、下＝推奨アクション（具体的）。元法 vs 改正を明示 */}
@@ -253,7 +257,7 @@ export default function NormChangeDetailPage() {
             ) : (
               <div className="space-y-2">
                 <p className="whitespace-pre-wrap text-zinc-800 dark:text-zinc-200">
-                  {item.summary}
+                  {stripObligationAndLevelFromSummary(item.summary) || item.summary}
                 </p>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">
                   （AI レポート未生成。.env に OPENAI_API_KEY を設定し、開発サーバーを再起動したうえで「再解析」すると、サマリ・箇条書き・詳細＋根拠が表示されます）
