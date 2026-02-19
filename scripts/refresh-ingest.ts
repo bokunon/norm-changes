@@ -71,30 +71,34 @@ async function main() {
   // 改正前全文取得で e-Gov に負荷をかけないよう 1 件あたり 500ms 待機
   const delayAfterPrevMs = 500;
 
-  for (let i = 0; i < dates.length; i++) {
-    const date = dates[i];
-    process.stdout.write(`[${i + 1}/${dates.length}] ${date} ... `);
-    const result = await runIngestForDate(date, { delayAfterPrevMs });
-    if (result.ok) {
-      totalCreated += result.created;
-      totalUpdated += result.updated;
-      totalLaws += result.total;
-      console.log("ok (total=%d created=%d updated=%d)", result.total, result.created, result.updated);
-    } else {
-      failed += 1;
-      console.log("失敗: %s", result.error);
+  try {
+    for (let i = 0; i < dates.length; i++) {
+      const date = dates[i];
+      process.stdout.write(`[${i + 1}/${dates.length}] ${date} ... `);
+      const result = await runIngestForDate(date, { delayAfterPrevMs });
+      if (result.ok) {
+        totalCreated += result.created;
+        totalUpdated += result.updated;
+        totalLaws += result.total;
+        console.log("ok (total=%d created=%d updated=%d)", result.total, result.created, result.updated);
+      } else {
+        failed += 1;
+        console.log("失敗: %s", result.error);
+      }
     }
-  }
+  } finally {
+    // ingest で例外や Ctrl+C が出ても、取り込んだ分は解析しておく（必ず実行）
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log("\n完了: %d 日処理, 法令 %d 件 (新規 %d / 更新 %d), 失敗 %d 日, 所要時間 %s 秒", dates.length, totalLaws, totalCreated, totalUpdated, failed, elapsed);
 
-  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-  console.log("\n完了: %d 日処理, 法令 %d 件 (新規 %d / 更新 %d), 失敗 %d 日, 所要時間 %s 秒", dates.length, totalLaws, totalCreated, totalUpdated, failed, elapsed);
-
-  // NormChange がまだない NormSource を解析し、一覧に表示されるようにする
-  if (totalLaws > 0) {
     console.log("\n未解析の NormSource を解析しています...");
     const analyzeResult = await runAnalyzeForPendingSources({});
     if (analyzeResult.ok) {
-      console.log("解析完了: NormChange %d 件作成", analyzeResult.created);
+      if (analyzeResult.created > 0) {
+        console.log("解析完了: NormChange %d 件作成", analyzeResult.created);
+      } else {
+        console.log("解析完了: 未解析の NormSource はありませんでした（0 件）");
+      }
     } else {
       console.warn("解析でエラー:", analyzeResult.error);
     }

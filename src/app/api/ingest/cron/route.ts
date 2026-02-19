@@ -80,11 +80,17 @@ export async function GET(request: Request) {
     const dates = dateRangeInclusive(startDate, endDate);
 
     if (dates.length === 0) {
+      // 取り込む日はなくても、未解析の NormSource が残っている可能性があるので analyze は実行する
+      const analyzeResult = await runAnalyzeForPendingSources({});
       return NextResponse.json({
         ok: true,
         message: "取り込み対象日なし（前日まで済み）",
         lastSuccessfulDate: lastSuccess,
         processed: [],
+        analyze:
+          analyzeResult.ok
+            ? { ok: true, created: analyzeResult.created }
+            : { ok: false, error: analyzeResult.error },
       });
     }
 
