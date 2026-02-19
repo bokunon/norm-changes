@@ -81,6 +81,13 @@ async function main() {
         totalUpdated += result.updated;
         totalLaws += result.total;
         console.log("ok (total=%d created=%d updated=%d)", result.total, result.created, result.updated);
+        // 1日ごとに analyze を実行し、動作確認しやすくする（未解析の NormSource を NormChange に）
+        const analyzeResult = await runAnalyzeForPendingSources({});
+        if (analyzeResult.ok && analyzeResult.created > 0) {
+          console.log(" → 解析: NormChange %d 件", analyzeResult.created);
+        } else if (!analyzeResult.ok) {
+          console.warn(" → 解析エラー:", analyzeResult.error);
+        }
       } else {
         failed += 1;
         console.log("失敗: %s", result.error);

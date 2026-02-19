@@ -37,16 +37,35 @@ export type RunAnalyzeOutput = RunAnalyzeResult | RunAnalyzeError;
  * 未解析の NormSource に対して NormChange を生成する。
  * cron の ingest 成功後や POST /api/analyze から呼ぶ。
  */
+/** 今日の 0:00 UTC（施行日が「今日以降」の判定用） */
+function startOfTodayUtc(): Date {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
+
+/**
+ * 未解析の NormSource に対して NormChange を生成する。
+ * cron の ingest 成功後や POST /api/analyze から呼ぶ。
+ * normSourceId 省略時は「施行日が今日以降」のものだけ対象（施行日未定も含む）。API コスト削減のため。
+ */
 export async function runAnalyzeForPendingSources(
   options: RunAnalyzeOptions = {}
 ): Promise<RunAnalyzeOutput> {
   const { normSourceId = null, replace = false } = options;
+
+  const todayStart = startOfTodayUtc();
 
   let sources = normSourceId
     ? await prisma.normSource.findMany({ where: { id: normSourceId } })
     : await prisma.normSource.findMany({
         where: {
           changes: { none: {} },
+          // 施行日が今日以降のものだけ（施行日未定＝null も対象）
+          OR: [
+            { effectiveAt: null },
+            { effectiveAt: { gte: todayStart } },
+          ],
         },
       });
 
