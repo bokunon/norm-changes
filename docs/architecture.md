@@ -188,6 +188,6 @@ flowchart LR
 
 ---
 
-このドキュメントは、[Issue #2](https://github.com/bokunon/spec-driven-app/issues/2) で整備したアーキテクチャ共通ドキュメントです。
+このドキュメントは、[Issue #2](https://github.com/bokunon/norm-change-alerts/issues/2) で整備したアーキテクチャ共通ドキュメントです。
 チケット 3 以降（Prisma スキーマ定義、バッチ実装、Web UI、Slack 連携など）の前提として参照してください。
 

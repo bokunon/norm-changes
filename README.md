@@ -1,4 +1,4 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# norm-change-alerts
 
 法令・省令・政令・ガイドラインの公示を検知し、「誰向けに／何がどう変わり／何をしないといけないか」を一覧・通知するアプリです。
 

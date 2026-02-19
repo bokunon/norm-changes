@@ -1,11 +1,14 @@
 /**
  * NormChange 一覧取得（フィルタ: 公示日・施行日・種別・タグ・リスク3軸）
- * GET /api/norm-changes?from=yyyyMMdd&to=yyyyMMdd&type=LAW&tagId=xxx&risk=survival,financial,credit
+ * Issue #31: デフォルト limit=20、cursor で次ページ取得。
+ * GET /api/norm-changes?from=...&to=...&limit=20&cursor=lastId
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 const RISK_VALUES = ["survival", "financial", "credit", "other"] as const;
+const DEFAULT_LIMIT = 20;
+const MAX_LIMIT = 100;
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -14,7 +17,11 @@ export async function GET(request: Request) {
   const type = searchParams.get("type");
   const tagId = searchParams.get("tagId");
   const riskParam = searchParams.get("risk");
-  const limit = Math.min(Number(searchParams.get("limit")) || 50, 100);
+  const limit = Math.min(
+    Number(searchParams.get("limit")) || DEFAULT_LIMIT,
+    MAX_LIMIT
+  );
+  const cursor = searchParams.get("cursor") ?? undefined;
 
   const normSourceWhere: { publishedAt?: { gte?: Date; lte?: Date }; type?: string } = {};
   if (from) {
@@ -57,14 +64,23 @@ export async function GET(request: Request) {
       normSource: true,
       tags: { include: { tag: true } },
     },
-    orderBy: [{ normSource: { publishedAt: "desc" } }, { createdAt: "desc" }],
-    take: limit,
+    orderBy: [
+      { normSource: { publishedAt: "desc" } },
+      { createdAt: "desc" },
+      { id: "asc" },
+    ],
+    take: limit + 1, // 次ページの有無判定用に1件多めに取得
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   });
 
-  type Item = (typeof items)[number];
+  const hasMore = items.length > limit;
+  const list = hasMore ? items.slice(0, limit) : items;
+  const nextCursor = hasMore ? list[list.length - 1]?.id : null;
+
+  type Item = (typeof list)[number];
   return NextResponse.json({
     ok: true,
-    items: items.map((i: Item) => ({
+    items: list.map((i: Item) => ({
       id: i.id,
       summary: i.summary,
       obligationLevel: i.obligationLevel,
@@ -90,6 +106,7 @@ export async function GET(request: Request) {
         : null,
       tags: i.tags.map((rel: { tag: { id: string; type: string; key: string; labelJa: string; description: string | null } }) => rel.tag),
     })),
+    nextCursor: nextCursor ?? undefined,
   });
 }
 
