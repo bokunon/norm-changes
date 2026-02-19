@@ -32,6 +32,7 @@ export async function GET(
       riskSurvival: change.riskSurvival,
       riskFinancial: change.riskFinancial,
       riskCredit: change.riskCredit,
+      riskOther: change.riskOther,
       penaltyDetail: change.penaltyDetail,
       effectiveFrom: change.effectiveFrom?.toISOString() ?? null,
       deadline: change.deadline?.toISOString() ?? null,

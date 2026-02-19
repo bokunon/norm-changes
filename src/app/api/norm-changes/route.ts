@@ -5,7 +5,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-const RISK_VALUES = ["survival", "financial", "credit"] as const;
+const RISK_VALUES = ["survival", "financial", "credit", "other"] as const;
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
   const where: {
     normSource?: { publishedAt?: { gte?: Date; lte?: Date }; type?: string };
     tags?: { some: { tagId: string } };
-    OR?: { riskSurvival?: boolean; riskFinancial?: boolean; riskCredit?: boolean }[];
+    OR?: { riskSurvival?: boolean; riskFinancial?: boolean; riskCredit?: boolean; riskOther?: boolean }[];
   } = {};
   if (Object.keys(normSourceWhere).length > 0) {
     where.normSource = normSourceWhere;
@@ -46,7 +46,8 @@ export async function GET(request: Request) {
     where.OR = riskFilters.map((r) => {
       if (r === "survival") return { riskSurvival: true };
       if (r === "financial") return { riskFinancial: true };
-      return { riskCredit: true };
+      if (r === "credit") return { riskCredit: true };
+      return { riskOther: true };
     });
   }
 
@@ -71,6 +72,7 @@ export async function GET(request: Request) {
       riskSurvival: i.riskSurvival,
       riskFinancial: i.riskFinancial,
       riskCredit: i.riskCredit,
+      riskOther: i.riskOther,
       penaltyDetail: i.penaltyDetail,
       effectiveFrom: i.effectiveFrom?.toISOString() ?? null,
       deadline: i.deadline?.toISOString() ?? null,

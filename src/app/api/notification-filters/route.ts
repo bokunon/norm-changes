@@ -40,6 +40,7 @@ export async function GET() {
         riskSurvival: f.riskSurvival,
         riskFinancial: f.riskFinancial,
         riskCredit: f.riskCredit,
+        riskOther: f.riskOther,
         normType: f.normType,
         tagId: f.tagId,
         createdAt: f.createdAt.toISOString(),
@@ -73,6 +74,7 @@ export async function POST(request: Request) {
     riskSurvival?: boolean;
     riskFinancial?: boolean;
     riskCredit?: boolean;
+    riskOther?: boolean;
     normType?: string | null;
     tagId?: string | null;
   };
@@ -99,6 +101,7 @@ export async function POST(request: Request) {
         riskSurvival: body.riskSurvival === true,
         riskFinancial: body.riskFinancial === true,
         riskCredit: body.riskCredit === true,
+        riskOther: body.riskOther === true,
         normType: body.normType && String(body.normType).trim() ? body.normType.trim() : null,
         tagId: body.tagId && String(body.tagId).trim() ? body.tagId.trim() : null,
       },
@@ -114,6 +117,7 @@ export async function POST(request: Request) {
       riskSurvival: filter.riskSurvival,
       riskFinancial: filter.riskFinancial,
       riskCredit: filter.riskCredit,
+      riskOther: filter.riskOther,
       normType: filter.normType,
       tagId: filter.tagId,
       createdAt: filter.createdAt.toISOString(),

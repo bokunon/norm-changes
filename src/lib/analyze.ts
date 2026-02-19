@@ -60,18 +60,20 @@ export interface RiskTypes {
   survival: boolean;
   financial: boolean;
   credit: boolean;
+  other: boolean;
 }
 
-/** 3軸リスクをキーワードで検知（#16 定義に基づく） */
+/** リスク分類をキーワードで検知（#16 定義）。その他はキーワードでは判定せず AI で付与 */
 export function detectRiskTypes(text: string | null | undefined): RiskTypes {
   if (!text || typeof text !== "string") {
-    return { survival: false, financial: false, credit: false };
+    return { survival: false, financial: false, credit: false, other: false };
   }
   const t = text;
   return {
     survival: SURVIVAL_RISK_KEYWORDS.some((k) => t.includes(k)),
     financial: FINANCIAL_RISK_KEYWORDS.some((k) => t.includes(k)),
     credit: CREDIT_RISK_KEYWORDS.some((k) => t.includes(k)),
+    other: false, // 手続き変更等は AI レポートで判定
   };
 }
 

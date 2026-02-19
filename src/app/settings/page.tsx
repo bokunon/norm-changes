@@ -19,16 +19,18 @@ type NotificationFilterItem = {
   riskSurvival: boolean;
   riskFinancial: boolean;
   riskCredit: boolean;
+  riskOther: boolean;
   normType: string | null;
   tagId: string | null;
   createdAt: string;
   updatedAt: string;
 };
 
-const RISK_LABELS: { key: "survival" | "financial" | "credit"; label: string }[] = [
+const RISK_LABELS: { key: "survival" | "financial" | "credit" | "other"; label: string }[] = [
   { key: "survival", label: "生存" },
   { key: "financial", label: "金銭" },
   { key: "credit", label: "信用" },
+  { key: "other", label: "その他" },
 ];
 
 export default function SettingsPage() {
@@ -46,6 +48,7 @@ export default function SettingsPage() {
   const [riskSurvival, setRiskSurvival] = useState(false);
   const [riskFinancial, setRiskFinancial] = useState(false);
   const [riskCredit, setRiskCredit] = useState(false);
+  const [riskOther, setRiskOther] = useState(false);
   const [normType, setNormType] = useState("");
   const [tagId, setTagId] = useState("");
 
@@ -108,6 +111,7 @@ export default function SettingsPage() {
         riskSurvival,
         riskFinancial,
         riskCredit,
+        riskOther,
         normType: normType || null,
         tagId: tagId.trim() || null,
       }),
@@ -123,6 +127,7 @@ export default function SettingsPage() {
             setRiskSurvival(false);
             setRiskFinancial(false);
             setRiskCredit(false);
+            setRiskOther(false);
             setNormType("");
             setTagId("");
             loadFilters();
@@ -160,6 +165,7 @@ export default function SettingsPage() {
     if (f.riskSurvival) risks.push("生存");
     if (f.riskFinancial) risks.push("金銭");
     if (f.riskCredit) risks.push("信用");
+    if (f.riskOther) risks.push("その他");
     if (risks.length) parts.push(`リスク: ${risks.join(", ")}`);
     if (f.normType) {
       const opt = NORM_TYPE_OPTIONS.find((o) => o.value === f.normType);
@@ -289,6 +295,15 @@ export default function SettingsPage() {
                       className="rounded border-zinc-400"
                     />
                     信用
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <input
+                      type="checkbox"
+                      checked={riskOther}
+                      onChange={(e) => setRiskOther(e.target.checked)}
+                      className="rounded border-zinc-400"
+                    />
+                    その他
                   </label>
                 </div>
               </fieldset>

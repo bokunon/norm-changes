@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "postinstall": "prisma generate",
-    "refresh:ingest": "tsx scripts/refresh-ingest.ts"
+    "refresh:ingest": "tsx scripts/refresh-ingest.ts",
+    "refresh:one": "tsx scripts/refresh-one-report.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.4.0",

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getNormTypeLabelJa } from "@/lib/norm-types";
+import { getMostSevereRiskShort } from "@/lib/risk-display";
 
 type NormChangeItem = {
   id: string;
@@ -12,6 +13,7 @@ type NormChangeItem = {
   riskSurvival: boolean;
   riskFinancial: boolean;
   riskCredit: boolean;
+  riskOther: boolean;
   penaltyDetail: string | null;
   effectiveFrom: string | null;
   normSource: {
@@ -26,10 +28,11 @@ type NormChangeItem = {
   tags: { id: string; key: string; labelJa: string; type: string }[];
 };
 
-const RISK_LABELS: { key: "survival" | "financial" | "credit"; label: string }[] = [
+const RISK_LABELS: { key: "survival" | "financial" | "credit" | "other"; label: string }[] = [
   { key: "survival", label: "生存" },
   { key: "financial", label: "金銭" },
   { key: "credit", label: "信用" },
+  { key: "other", label: "その他" },
 ];
 
 export default function NormChangesPage() {
@@ -37,7 +40,7 @@ export default function NormChangesPage() {
   const [loading, setLoading] = useState(true);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [riskFilter, setRiskFilter] = useState<("survival" | "financial" | "credit")[]>([]);
+  const [riskFilter, setRiskFilter] = useState<("survival" | "financial" | "credit" | "other")[]>([]);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -149,27 +152,14 @@ export default function NormChangesPage() {
                   <div className="flex flex-wrap gap-2 text-xs">
                     <span className="text-zinc-400">
                       リスク:{" "}
-                      {(item.riskSurvival || item.riskFinancial || item.riskCredit) ? (
-                        <span className="inline-flex flex-wrap gap-1">
-                          {item.riskSurvival && (
-                            <span className="rounded bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 text-amber-800 dark:text-amber-200">
-                              生存
-                            </span>
-                          )}
-                          {item.riskFinancial && (
-                            <span className="rounded bg-red-100 dark:bg-red-900/40 px-1.5 py-0.5 text-red-800 dark:text-red-200">
-                              金銭
-                            </span>
-                          )}
-                          {item.riskCredit && (
-                            <span className="rounded bg-sky-100 dark:bg-sky-900/40 px-1.5 py-0.5 text-sky-800 dark:text-sky-200">
-                              信用
-                            </span>
-                          )}
-                        </span>
-                      ) : (
-                        "—"
-                      )}
+                      {(() => {
+                        const r = getMostSevereRiskShort(item);
+                        return r ? (
+                          <span className={r.className}>{r.label}</span>
+                        ) : (
+                          "—"
+                        );
+                      })()}
                     </span>
                     <span className="text-zinc-400">
                       施行日: {formatDate(item.normSource?.effectiveAt ?? null)}

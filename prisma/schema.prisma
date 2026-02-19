@@ -37,10 +37,11 @@ model NormChange {
   obligationLevel  String    // MUST, SHOULD, INFO
   penaltyRisk      String    // HIGH, MID, LOW, NONE（後方互換）
   penaltyDetail    String?   @db.Text
-  // Issue #16/#19: 3軸リスク（生存・金銭・信用）
+  // Issue #16/#19: リスク分類（生存・金銭・信用・その他）
   riskSurvival     Boolean   @default(false) // 業務停止・免許取消等
   riskFinancial    Boolean   @default(false) // 罰金・課徴金等
   riskCredit       Boolean   @default(false) // 社名公表・勧告等
+  riskOther        Boolean   @default(false) // 手続き変更等、上記に当てはまらないもの
   effectiveFrom    DateTime?
   deadline         DateTime?
   createdAt        DateTime  @default(now())
@@ -118,6 +119,7 @@ model NotificationFilter {
   riskSurvival  Boolean   @default(false) // 生存リスクに一致するものを通す
   riskFinancial Boolean   @default(false) // 金銭リスクに一致するものを通す
   riskCredit    Boolean   @default(false) // 信用リスクに一致するものを通す
+  riskOther     Boolean   @default(false) // その他リスクに一致するものを通す
   normType      String?   // 種別（LAW 等。null は条件に含めない）
   tagId         String?   // タグで絞る（null は条件に含めない）
   createdAt     DateTime  @default(now())

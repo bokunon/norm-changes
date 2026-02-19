@@ -30,6 +30,7 @@ export async function GET(
         riskSurvival: filter.riskSurvival,
         riskFinancial: filter.riskFinancial,
         riskCredit: filter.riskCredit,
+        riskOther: filter.riskOther,
         normType: filter.normType,
         tagId: filter.tagId,
         createdAt: filter.createdAt.toISOString(),

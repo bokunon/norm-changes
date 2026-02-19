@@ -4,7 +4,7 @@
 import type { NormChange, NormSource, NotificationFilter } from "@prisma/client";
 
 export function matchesNotificationFilter(
-  change: Pick<NormChange, "riskSurvival" | "riskFinancial" | "riskCredit">,
+  change: Pick<NormChange, "riskSurvival" | "riskFinancial" | "riskCredit" | "riskOther">,
   source: Pick<NormSource, "publishedAt" | "type">,
   filter: NotificationFilter,
   hasTagId: boolean
@@ -17,10 +17,14 @@ export function matchesNotificationFilter(
 
   // リスク条件: フィルタで指定したリスクの「いずれか1つでも」記事に付いていれば一致（OR）
   const riskMatch =
-    (!filter.riskSurvival && !filter.riskFinancial && !filter.riskCredit) ||
+    (!filter.riskSurvival &&
+      !filter.riskFinancial &&
+      !filter.riskCredit &&
+      !filter.riskOther) ||
     (filter.riskSurvival && change.riskSurvival) ||
     (filter.riskFinancial && change.riskFinancial) ||
-    (filter.riskCredit && change.riskCredit);
+    (filter.riskCredit && change.riskCredit) ||
+    (filter.riskOther && change.riskOther);
   if (!riskMatch) return false;
 
   return true;
