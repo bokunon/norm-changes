@@ -195,11 +195,13 @@ export async function generateReport(input: ReportInput): Promise<ReportOutput |
     const actionItems: ActionItemWithSource[] = Array.isArray(parsed.actionItems)
       ? (parsed.actionItems as (string | { text?: string; source?: string })[])
           .filter((x) => x != null)
-          .map((x) => {
+          .map((x): ActionItemWithSource => {
             if (typeof x === "string") return { text: x, source: undefined };
             const text = typeof x?.text === "string" ? x.text : "";
-            const source =
-              x?.source === "amendment" || x?.source === "existing" ? x.source : undefined;
+            const source: RecommendationSource | undefined =
+              x?.source === "amendment" || x?.source === "existing"
+                ? (x.source as RecommendationSource)
+                : undefined;
             return { text, source };
           })
           .filter((a) => a.text.trim() !== "")
