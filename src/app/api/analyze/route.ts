@@ -2,7 +2,7 @@
  * NormSource から NormChange を生成する（MVP: 1ソース1変更点）
  * POST /api/analyze?normSourceId=xxx （省略時は NormChange がまだない NormSource を対象）
  * Issue #12: OPENAI_API_KEY 設定時は AI でレポート生成。未設定時はキーワードのみ。
- * SLACK_WEBHOOK_URL 設定時は新規 NormChange ごとに Slack 通知
+ * Issue #30: 通知用フィルタが 1 つ以上あるとき、新規 NormChange がそのいずれかに一致した場合のみ Slack 通知
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -14,6 +14,7 @@ import {
 } from "@/lib/analyze";
 import { notifySlack } from "@/lib/slack";
 import { generateReport } from "@/lib/report-ai";
+import { matchesNotificationFilter } from "@/lib/notification-filter-match";
 
 export async function POST(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -89,15 +90,35 @@ export async function POST(request: Request) {
     });
     created.push(change.id);
 
-    await notifySlack({
-      title: src.title,
-      summary,
-      type: src.type,
-      publishedAt: src.publishedAt.toISOString().slice(0, 10),
-      effectiveAt: src.effectiveAt?.toISOString().slice(0, 10) ?? null,
-      url: src.url ?? null,
-      penaltyRisk,
-    });
+    // Issue #30: 通知用フィルタに一致したときだけ Slack に送信
+    const notificationFilters = await prisma.notificationFilter.findMany();
+    if (notificationFilters.length > 0) {
+      const changeWithTags = await prisma.normChange.findUnique({
+        where: { id: change.id },
+        include: { tags: true },
+      });
+      const hasTagId = (tagId: string) =>
+        (changeWithTags?.tags.some((t) => t.tagId === tagId) ?? false);
+      const shouldNotify = notificationFilters.some((f) =>
+        matchesNotificationFilter(
+          change,
+          src,
+          f,
+          f.tagId ? hasTagId(f.tagId) : true
+        )
+      );
+      if (shouldNotify) {
+        const baseUrl = process.env.VERCEL_URL
+          ? `https://${process.env.VERCEL_URL}`
+          : process.env.SITE_URL ?? "http://localhost:3000";
+        await notifySlack({
+          title: src.title,
+          summary,
+          penaltyRisk,
+          detailPageUrl: `${baseUrl}/norm-changes/${change.id}`,
+        });
+      }
+    }
   }
 
   return NextResponse.json({

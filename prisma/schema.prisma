@@ -108,3 +108,20 @@ model UserFilter {
 
   @@index([userId])
 }
+
+// Issue #30: Slack 通知用フィルタ（新規 NormChange がこの条件に一致したときのみ通知）
+model NotificationFilter {
+  id            String    @id @default(cuid())
+  name          String    // フィルタ名（例: 生存リスクのみ, 金銭関連）
+  publishedFrom DateTime? // 公示日 From（null は条件に含めない）
+  publishedTo   DateTime? // 公示日 To（null は条件に含めない）
+  riskSurvival  Boolean   @default(false) // 生存リスクに一致するものを通す
+  riskFinancial Boolean   @default(false) // 金銭リスクに一致するものを通す
+  riskCredit    Boolean   @default(false) // 信用リスクに一致するものを通す
+  normType      String?   // 種別（LAW 等。null は条件に含めない）
+  tagId         String?   // タグで絞る（null は条件に含めない）
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([createdAt])
+}

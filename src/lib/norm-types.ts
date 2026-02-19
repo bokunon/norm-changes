@@ -17,3 +17,11 @@ export function getNormTypeLabelJa(type: string | null | undefined): string {
   if (type == null || type === "") return "—";
   return TYPE_LABELS[type] ?? type;
 }
+
+/** 種別選択用のオプション（Issue #30 設定画面など） */
+export const NORM_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "LAW", label: "法律" },
+  { value: "ORDINANCE", label: "政令" },
+  { value: "REGULATION", label: "省令・規則" },
+  { value: "OTHER", label: "その他" },
+];

@@ -63,6 +63,12 @@ export default function NormChangesPage() {
       <div className="max-w-4xl mx-auto">
         {/* Issue #13: DB接続確認・アーキテクチャ概要をサブとしてナビに配置 */}
         <nav className="mb-6 flex flex-wrap items-center gap-3 text-sm">
+          <a
+            href="/settings"
+            className="text-zinc-600 dark:text-zinc-400 hover:underline"
+          >
+            設定（Slack 通知）
+          </a>
           <span className="text-zinc-500 dark:text-zinc-400">サブ:</span>
           <a
             href="/api/db-health"
@@ -141,25 +147,33 @@ export default function NormChangesPage() {
                     {item.summary}
                   </p>
                   <div className="flex flex-wrap gap-2 text-xs">
-                    {(item.riskSurvival || item.riskFinancial || item.riskCredit) && (
-                      <span className="flex flex-wrap gap-1">
-                        {item.riskSurvival && (
-                          <span className="rounded bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 text-amber-800 dark:text-amber-200">
-                            生存
-                          </span>
-                        )}
-                        {item.riskFinancial && (
-                          <span className="rounded bg-red-100 dark:bg-red-900/40 px-1.5 py-0.5 text-red-800 dark:text-red-200">
-                            金銭
-                          </span>
-                        )}
-                        {item.riskCredit && (
-                          <span className="rounded bg-sky-100 dark:bg-sky-900/40 px-1.5 py-0.5 text-sky-800 dark:text-sky-200">
-                            信用
-                          </span>
-                        )}
-                      </span>
-                    )}
+                    <span className="text-zinc-400">
+                      リスク:{" "}
+                      {(item.riskSurvival || item.riskFinancial || item.riskCredit) ? (
+                        <span className="inline-flex flex-wrap gap-1">
+                          {item.riskSurvival && (
+                            <span className="rounded bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 text-amber-800 dark:text-amber-200">
+                              生存
+                            </span>
+                          )}
+                          {item.riskFinancial && (
+                            <span className="rounded bg-red-100 dark:bg-red-900/40 px-1.5 py-0.5 text-red-800 dark:text-red-200">
+                              金銭
+                            </span>
+                          )}
+                          {item.riskCredit && (
+                            <span className="rounded bg-sky-100 dark:bg-sky-900/40 px-1.5 py-0.5 text-sky-800 dark:text-sky-200">
+                              信用
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </span>
+                    <span className="text-zinc-400">
+                      施行日: {formatDate(item.normSource?.effectiveAt ?? null)}
+                    </span>
                     {item.normSource?.type && (
                       <span className="rounded bg-zinc-200 dark:bg-zinc-700 px-1.5 py-0.5 text-xs font-medium text-zinc-700 dark:text-zinc-300">
                         {getNormTypeLabelJa(item.normSource.type)}

@@ -27,9 +27,11 @@
 
 ## Slack を使う場合だけ
 
+Vercel の **Environment Variables**（プロジェクト → **Settings** → **Environment Variables**）に以下を追加する。
+
 | Name | Value |
 |------|--------|
-| `SLACK_WEBHOOK_URL` | `https://hooks.slack.com/services/xxx/yyy/zzz` |
+| `SLACK_WEBHOOK_URL` | Incoming Webhook の URL（例: `https://hooks.slack.com/services/xxx/yyy/zzz`） |
 
 ---
 

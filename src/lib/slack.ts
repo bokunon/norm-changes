@@ -6,23 +6,18 @@
 export async function notifySlack(payload: {
   title: string;
   summary: string;
-  type: string;
-  publishedAt: string;
-  effectiveAt?: string | null;
-  url?: string | null;
   penaltyRisk: string;
+  detailPageUrl: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const url = process.env.SLACK_WEBHOOK_URL;
   if (!url || url === "") return { ok: true };
 
   const text = [
     `*${payload.title}*`,
-    `種別: ${payload.type} | 公示日: ${payload.publishedAt}`,
-    payload.effectiveAt ? `施行日: ${payload.effectiveAt}` : null,
     payload.penaltyRisk !== "NONE" ? `⚠️ 罰則リスク: ${payload.penaltyRisk}` : null,
     "",
     payload.summary.slice(0, 500) + (payload.summary.length > 500 ? "…" : ""),
-    payload.url ? `<${payload.url}|法令本文>` : null,
+    `<${payload.detailPageUrl}|詳細ページを開く>`,
   ]
     .filter(Boolean)
     .join("\n");

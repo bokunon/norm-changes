@@ -41,6 +41,10 @@ jobs:
       - name: Pull Vercel environment
         run: npx vercel pull --yes --environment=production --token=$VERCEL_TOKEN
 
+      # デプロイ前に必ず Prisma クライアントを再生成（NotificationFilter 等が含まれる）
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
       - name: Build
         run: npx vercel build --prod --token=$VERCEL_TOKEN
 
