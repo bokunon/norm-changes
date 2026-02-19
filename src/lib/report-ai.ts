@@ -187,7 +187,11 @@ export async function generateReport(input: ReportInput): Promise<ReportOutput |
     const actionItems = Array.isArray(parsed.actionItems)
       ? (parsed.actionItems as string[]).filter((x) => typeof x === "string")
       : [];
-    const detailedRecommendations = Array.isArray(parsed.detailedRecommendations)
+    const detailedRecommendations: {
+      action: string;
+      basis: string;
+      source?: RecommendationSource;
+    }[] = Array.isArray(parsed.detailedRecommendations)
       ? (
           parsed.detailedRecommendations as {
             action?: string;
@@ -200,7 +204,9 @@ export async function generateReport(input: ReportInput): Promise<ReportOutput |
             action: String(x.action),
             basis: typeof x.basis === "string" ? x.basis : "",
             source:
-              x.source === "amendment" || x.source === "existing" ? x.source : undefined,
+              x.source === "amendment" || x.source === "existing"
+                ? (x.source as RecommendationSource)
+                : undefined,
           }))
       : [];
 
