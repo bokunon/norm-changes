@@ -96,8 +96,12 @@ export async function runAnalyzeForPendingSources(
       let riskTypes = detectRiskTypes(text);
 
       let reportSummary: string | null = null;
-      let reportActionItems: string[] | null = null;
-      let reportDetailedRecommendations: { action: string; basis: string }[] | null = null;
+      let reportActionItems: { text: string; source?: "amendment" | "existing" }[] | null = null;
+      let reportDetailedRecommendations: {
+        action: string;
+        basis: string;
+        source?: "amendment" | "existing";
+      }[] | null = null;
 
       const report = await generateReport({
         title: src.title,
@@ -110,9 +114,18 @@ export async function runAnalyzeForPendingSources(
 
       if (report) {
         reportSummary = report.summary;
-        reportActionItems = report.actionItems.length > 0 ? report.actionItems : null;
+        reportActionItems =
+          report.actionItems.length > 0
+            ? report.actionItems.map((a) => ({ text: a.text, source: a.source }))
+            : null;
         reportDetailedRecommendations =
-          report.detailedRecommendations.length > 0 ? report.detailedRecommendations : null;
+          report.detailedRecommendations.length > 0
+            ? report.detailedRecommendations.map((r) => ({
+                action: r.action,
+                basis: r.basis,
+                source: r.source,
+              }))
+            : null;
         if (report.summary) summary = report.summary;
         if (report.obligationLevel) obligationLevel = report.obligationLevel;
         if (report.riskLevel) penaltyRisk = report.riskLevel;
@@ -176,9 +189,11 @@ export async function runAnalyzeForPendingSources(
           )
         );
         if (shouldNotify) {
-          const baseUrl = process.env.VERCEL_URL
-            ? `https://${process.env.VERCEL_URL}`
-            : process.env.SITE_URL ?? "http://localhost:3000";
+          // Slack のリンク: SITE_URL 優先（本番URLを明示可能）。未設定なら VERCEL_URL（Vercel のみ）、最後に localhost
+          const baseUrl =
+            process.env.SITE_URL?.trim() ||
+            (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+            "http://localhost:3000";
           await notifySlack({
             title: src.title,
             riskDetailText: change.penaltyDetail ?? null,

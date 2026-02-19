@@ -66,3 +66,16 @@ export function getMostSevereRiskShort(item: RiskFlags): (RiskDisplay & { label:
   }
   return null;
 }
+
+/**
+ * リスク詳細（penaltyDetail）の先頭にある程度・義務レベルの表記を除去する。
+ * AI が "MID- 〜" "SHOULD 〜" などを返すことがあるため、表示用にクリーンにする。
+ */
+export function stripRiskLevelFromPenaltyDetail(text: string | null | undefined): string {
+  if (!text || typeof text !== "string") return "";
+  let s = text.trim();
+  // 先頭の "HIGH-", "MID-", "LOW-", "NONE-", "MUST ", "SHOULD ", "INFO " 等を除去（ハイフン・スペース・コロン付き）
+  const prefix = /^(HIGH|MID|LOW|NONE|MUST|SHOULD|INFO)\s*[-–—:\s]+\s*/i;
+  while (prefix.test(s)) s = s.replace(prefix, "").trim();
+  return s;
+}

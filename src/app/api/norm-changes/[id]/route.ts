@@ -39,8 +39,8 @@ export async function GET(
       createdAt: change.createdAt.toISOString(),
       updatedAt: change.updatedAt.toISOString(),
       reportSummary: change.reportSummary ?? null,
-      reportActionItems: change.reportActionItems as string[] | null,
-      reportDetailedRecommendations: change.reportDetailedRecommendations as { action: string; basis: string }[] | null,
+      reportActionItems: change.reportActionItems as string[] | { text: string; source?: "amendment" | "existing" }[] | null,
+      reportDetailedRecommendations: change.reportDetailedRecommendations as { action: string; basis: string; source?: "amendment" | "existing" }[] | null,
       normSource: change.normSource
         ? {
             id: change.normSource.id,

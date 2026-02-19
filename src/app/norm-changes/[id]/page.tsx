@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { getNormTypeLabelJa } from "@/lib/norm-types";
-import { getMostSevereRisk } from "@/lib/risk-display";
+import { getMostSevereRisk, stripRiskLevelFromPenaltyDetail } from "@/lib/risk-display";
 
 type Detail = {
   id: string;
@@ -19,7 +19,8 @@ type Detail = {
   effectiveFrom: string | null;
   deadline: string | null;
   reportSummary: string | null;
-  reportActionItems: string[] | null;
+  /** 後方互換: string[] または { text, source? }[] */
+  reportActionItems: string[] | { text: string; source?: "amendment" | "existing" }[] | null;
   reportDetailedRecommendations: {
     action: string;
     basis: string;
@@ -103,21 +104,40 @@ export default function NormChangeDetailPage() {
               <dt className="text-zinc-500">施行日</dt>
               <dd>{formatDate(item.normSource?.effectiveAt ?? null)}</dd>
             </div>
-            {/* リスクの種類: 当該変更の中で最も厳しいリスクを1つだけ表示（事業継続 > 金銭 > レピュテーション > その他） */}
+            {/* リスクの種類: 条文に罰則等が明示されている場合の分類。手続き変更のみは「その他」 */}
             <div>
               <dt className="text-zinc-500">リスクの種類</dt>
-              <dd className="flex flex-wrap gap-2 mt-1">
+              <dd className="flex flex-wrap items-baseline gap-2 mt-1">
                 {(() => {
                   const risk = getMostSevereRisk(item);
-                  return risk ? (
-                    <span className={risk.className}>{risk.label}</span>
-                  ) : (
-                    "—"
+                  const penaltyNone =
+                    item.penaltyRisk === "NONE" ||
+                    !item.penaltyDetail ||
+                    item.penaltyDetail.trim() === "" ||
+                    item.penaltyDetail === "なし";
+                  const showFinancialNote =
+                    risk?.key === "financial" && penaltyNone;
+                  return (
+                    <>
+                      {risk ? (
+                        <span className={risk.className}>{risk.label}</span>
+                      ) : (
+                        "—"
+                      )}
+                      {showFinancialNote && (
+                        <span className="text-xs text-amber-600 dark:text-amber-400">
+                          （条文上に罰則の明示がないため要確認）
+                        </span>
+                      )}
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400 block mt-0.5">
+                        条文に罰則・金銭規定等が明示されている場合の分類。手続き変更のみは「その他」。
+                      </span>
+                    </>
                   );
                 })()}
               </dd>
             </div>
-            {/* リスク詳細: リスクの種類の補足（解釈断定文）。程度（HIGH/MID等）はラベルに含めない */}
+            {/* リスク詳細: リスクの種類の補足（解釈断定文）。MID-/SHOULD等のプレフィックスは表示しない */}
             <div>
               <dt className="text-zinc-500">リスク詳細</dt>
               <dd
@@ -129,7 +149,7 @@ export default function NormChangeDetailPage() {
               >
                 {item.penaltyRisk === "NONE"
                   ? "なし"
-                  : item.penaltyDetail ?? "（要確認）"}
+                  : stripRiskLevelFromPenaltyDetail(item.penaltyDetail) || "（要確認）"}
               </dd>
             </div>
             {item.tags.length > 0 && (
@@ -153,7 +173,8 @@ export default function NormChangeDetailPage() {
             <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-2">
               概要・何をしないといけないか
             </h2>
-            {item.reportSummary || (item.reportActionItems && item.reportActionItems.length > 0) ? (
+            {item.reportSummary ||
+            (item.reportActionItems && item.reportActionItems.length > 0) ? (
               <div className="space-y-4">
                 {item.reportSummary && (
                   <p className="whitespace-pre-wrap text-zinc-800 dark:text-zinc-200">
@@ -164,12 +185,30 @@ export default function NormChangeDetailPage() {
                 {item.reportActionItems && item.reportActionItems.length > 0 && (
                   <div>
                     <h3 className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">
-                      取るべきアクション（ポイント）
+                      取るべきアクション（ポイント） — 今回の改正で変わった項目は「改正による」で表示
                     </h3>
-                    <ul className="list-disc list-inside space-y-1 text-zinc-800 dark:text-zinc-200 text-sm">
-                      {item.reportActionItems.map((action, i) => (
-                        <li key={i}>{action}</li>
-                      ))}
+                    <ul className="list-disc list-inside space-y-1.5 text-zinc-800 dark:text-zinc-200 text-sm">
+                      {item.reportActionItems.map((action, i) => {
+                        const text =
+                          typeof action === "string" ? action : action.text;
+                        const source =
+                          typeof action === "string" ? undefined : action.source;
+                        return (
+                          <li key={i} className="flex flex-wrap items-center gap-2">
+                            <span>{text}</span>
+                            {source === "amendment" && (
+                              <span className="rounded bg-emerald-100 dark:bg-emerald-900/40 px-1.5 py-0.5 text-xs text-emerald-800 dark:text-emerald-200">
+                                改正による
+                              </span>
+                            )}
+                            {source === "existing" && (
+                              <span className="rounded bg-zinc-200 dark:bg-zinc-600 px-1.5 py-0.5 text-xs text-zinc-700 dark:text-zinc-300">
+                                元法
+                              </span>
+                            )}
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 )}

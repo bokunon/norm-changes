@@ -17,9 +17,13 @@ export interface ReportInput {
 /** Issue #37: 推奨アクションの出典（元法 vs 改正） */
 export type RecommendationSource = "amendment" | "existing";
 
+/** 取るべきアクション（ポイント）1件。source で「今回の改正で変わったか」を明示 */
+export type ActionItemWithSource = { text: string; source?: RecommendationSource };
+
 export interface ReportOutput {
   summary: string;
-  actionItems: string[];
+  /** 取るべきアクションのポイント。各要素に source を付与すると「今回の改正で変わった」が明示される */
+  actionItems: ActionItemWithSource[];
   detailedRecommendations: {
     action: string;
     basis: string;
@@ -42,7 +46,10 @@ const SYSTEM_PROMPT = `あなたは法令・省令・政令の改正内容を読
 JSON の形式:
 {
   "summary": "1〜3文で、この改正の要点と企業が把握すべきことを要約",
-  "actionItems": ["ポイント1", "ポイント2", ...],
+  "actionItems": [
+    { "text": "ポイント1の文言", "source": "amendment" または "existing" },
+    ...
+  ],
   "detailedRecommendations": [
     { "action": "具体的な推奨アクションの文言", "basis": "根拠（条文・箇所など）", "source": "amendment" または "existing" },
     ...
@@ -61,9 +68,9 @@ JSON の形式:
   - other: 手続きの方法変更・届出様式変更・記載の整理等、上記3つに当てはまらないが対応が必要な改正。**手続き変更のみの場合は other を選ぶ。**
   厳しさの順は survival > financial > credit > other。複数該当しうる場合は厳しい方1つだけ返す。
 - obligationLevel: 義務規定（しなければならない等）が強ければ MUST。推奨程度なら SHOULD。参考情報なら INFO。
-- actionItems: 取るべきアクションの「ポイントのみ」を3〜10個。短い見出し程度に。
+- actionItems: 取るべきアクションの「ポイントのみ」を3〜10個。各要素は { "text": "文言", "source": "amendment" または "existing" }。source は「今回の改正で新たに必要になった」なら amendment、「元の法律からある対応」なら existing。必ず付与する。
 - detailedRecommendations: 「具体的な」推奨アクションと根拠。各要素に source を付与: "amendment"=改正により発生した内容, "existing"=元の法律にあった内容。
-- penaltyDetailText: 改正前にはなく改正後に発生している罰則・義務リスクに限定し、解釈を断定で1文で記載。該当しなければ null。`;
+- penaltyDetailText: 改正前にはなく改正後に発生している罰則・義務リスクに限定し、解釈を断定で1文で記載。該当しなければ null。**程度（HIGH/MID/LOW/NONE）や義務レベル（MUST/SHOULD/INFO）の表記は一切入れず、解釈の断定文のみを記載する。**`;
 
 function buildUserPrompt(input: ReportInput): string {
   const parts: string[] = [
@@ -88,7 +95,8 @@ function buildUserPrompt(input: ReportInput): string {
   return parts.join("\n");
 }
 
-const MODEL = "gpt-4o-mini";
+/** レポート生成・リスク検証に使用。5 系の方が指示遵守が良い。nano はより安価・低レイテンシ用 */
+const MODEL = "gpt-5-mini";
 
 type RiskTypeToValidate = "survival" | "financial" | "credit";
 
@@ -169,7 +177,7 @@ export async function generateReport(input: ReportInput): Promise<ReportOutput |
   const userContent = buildUserPrompt(input);
 
   try {
-    // リスク判定の精度のため gpt-4o-mini を使用。必要に応じて gpt-4.1-nano 等に変更可
+    // gpt-5-mini でレポート生成（指示遵守を優先）。コスト優先なら gpt-5-nano に変更可
     const completion = await openai.chat.completions.create({
       model: MODEL,
       messages: [
@@ -184,8 +192,17 @@ export async function generateReport(input: ReportInput): Promise<ReportOutput |
     if (!raw) return null;
 
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const actionItems = Array.isArray(parsed.actionItems)
-      ? (parsed.actionItems as string[]).filter((x) => typeof x === "string")
+    const actionItems: ActionItemWithSource[] = Array.isArray(parsed.actionItems)
+      ? (parsed.actionItems as (string | { text?: string; source?: string })[])
+          .filter((x) => x != null)
+          .map((x) => {
+            if (typeof x === "string") return { text: x, source: undefined };
+            const text = typeof x?.text === "string" ? x.text : "";
+            const source =
+              x?.source === "amendment" || x?.source === "existing" ? x.source : undefined;
+            return { text, source };
+          })
+          .filter((a) => a.text.trim() !== "")
       : [];
     const detailedRecommendations: {
       action: string;

@@ -34,8 +34,8 @@ model NormChange {
   id               String    @id @default(cuid())
   normSourceId     String
   summary          String    @db.Text
-  obligationLevel  String    // MUST, SHOULD, INFO
-  penaltyRisk      String    // HIGH, MID, LOW, NONE（後方互換）
+  obligationLevel  String    // 義務の強さ: MUST/SHOULD/INFO（生存・金銭・信用とは別軸。詳細画面では未表示）
+  penaltyRisk      String    // HIGH, MID, LOW, NONE（後方互換）。表示時は程度表記は出さない
   penaltyDetail    String?   @db.Text
   // Issue #16/#19: リスク分類（生存・金銭・信用・その他）
   riskSurvival     Boolean   @default(false) // 業務停止・免許取消等
