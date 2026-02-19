@@ -12,6 +12,7 @@
  */
 import "dotenv/config";
 import { runIngestForDate } from "../src/lib/ingest-laws";
+import { setLastSuccessfulIngestDate } from "../src/lib/ingest-state";
 
 /** yyyyMMdd の日付リストを生成（from ≦ to） */
 function dateRange(from: string, to: string): string[] {
@@ -86,6 +87,13 @@ async function main() {
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log("\n完了: %d 日処理, 法令 %d 件 (新規 %d / 更新 %d), 失敗 %d 日, 所要時間 %s 秒", dates.length, totalLaws, totalCreated, totalUpdated, failed, elapsed);
+
+  // 次回 cron が「続きから」取り込めるよう、最後に処理した日を記録する
+  if (dates.length > 0) {
+    const lastDate = dates[dates.length - 1];
+    await setLastSuccessfulIngestDate(lastDate);
+    console.log("IngestState を %s まで取り込み済みに更新しました。", lastDate);
+  }
 }
 
 main().catch((e) => {

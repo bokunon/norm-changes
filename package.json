@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "postinstall": "prisma generate",
     "refresh:ingest": "tsx scripts/refresh-ingest.ts",
+    "reset:ingest-data": "tsx scripts/reset-ingest-data.ts",
     "refresh:one": "tsx scripts/refresh-one-report.ts"
   },
   "dependencies": {

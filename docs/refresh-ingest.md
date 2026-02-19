@@ -3,6 +3,26 @@
 日付範囲を指定して bulkdownload から更新法令を取り直し、NormSource を洗い替えます。  
 **改正前全文（rawTextPrev）** の取得で e-Gov API v2 を都度叩くため、1 日あたり数分かかることがあります。
 
+## 法令データのみ削除してから全期間取り込み（Option 2）
+
+Tag / User / NotificationFilter は残し、**NormSource（および関連 NormChange, NormChangeTag）と IngestState だけ**消して、公示済みデータを取得可能な全期間で取り直す手順です。
+
+1. **法令データをリセット**
+   ```bash
+   npm run reset:ingest-data
+   ```
+
+2. **取得可能な全期間で ingest を実行**  
+   e-Gov bulkdownload の利用可能開始日は **2020年11月24日** です。`to` は昨日の日付（yyyyMMdd）を指定してください。
+   ```bash
+   npm run refresh:ingest 20201124 <昨日のyyyyMMdd>
+   ```
+   例: 今日が 2025年2月20日なら `npm run refresh:ingest 20201124 20250219`
+
+3. 実行完了後、**IngestState が最後の日付まで更新**されるため、翌日以降は Vercel Cron が「続きから」前日分だけ取り込みます。
+
+**Vercel 本番で行う場合**: ローカルで `DATABASE_URL` に本番の接続文字列を設定し、上記 1〜2 を実行します。Cron は **日本時間 7:00**（UTC 22:00）に 1 日 1 回実行されます。
+
 ## 前提
 
 - `.env` に `DATABASE_URL` が設定されていること
