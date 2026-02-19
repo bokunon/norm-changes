@@ -21,6 +21,36 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
    ```
 3. （任意）Slack 通知を使う場合は `.env` に `SLACK_WEBHOOK_URL` を設定する。
 
+## データ取得（ingest）のローカル確認（Issue #14）
+
+e-Gov からのデータ取得（ingest）は本番では **Vercel Cron で一日1回** 実行されます。ローカルで同じ処理を試す方法は次のとおりです。
+
+1. **開発サーバーを起動**  
+   ```bash
+   npm run dev
+   ```
+
+2. **手動で 1 日分だけ実行**（ブラウザまたは curl）  
+   - 例: 過去の実在する日付で試す  
+   ```bash
+   curl "http://localhost:3000/api/ingest/laws?date=20230201"
+   ```
+   - 日付を省略すると「当日」で実行されます。
+
+3. **複数日分をスクリプトで実行**（改正前全文取得あり・時間がかかります）  
+   ```bash
+   npm run refresh:ingest -- 20230201 20230207
+   ```
+
+4. **Cron エンドポイントをローカルで試す**（オプション）  
+   - `.env` に `CRON_SECRET=任意の文字列` を追加し、同じ文字列で Authorization を付けて呼ぶ。  
+   ```bash
+   curl -H "Authorization: Bearer 任意の文字列" "http://localhost:3000/api/ingest/cron"
+   ```
+   - このエンドポイントは「UTC の前日」分を 1 日分だけ取り込みます。
+
+本番（Vercel）では `vercel.json` の cron で毎日 19:00 UTC に `/api/ingest/cron` が呼ばれます。Vercel の Environment Variables に `CRON_SECRET` を設定してください。
+
 ## Getting Started
 
 First, run the development server:

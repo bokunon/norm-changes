@@ -143,8 +143,9 @@ erDiagram
   - Vercel 上に Next.js アプリをデプロイ
 - データベース
   - Neon（マネージド PostgreSQL）を利用
-- バッチ処理
-  - Vercel の cron 機能、または GitHub Actions による定期実行
+- バッチ処理（Issue #14）
+  - **e-Gov ingest**: Vercel Cron で一日1回 `/api/ingest/cron` を実行（前日分の公示データを取得）。`vercel.json` の `crons` で `0 19 * * *`（毎日 19:00 UTC = 日本時間 4:00 翌日）。本番では Vercel の Environment Variables に `CRON_SECRET` を設定すること。
+  - 代替: GitHub Actions の schedule や外部 cron サービスで同エンドポイントを呼ぶことも可能。
 
 #### 環境
 
