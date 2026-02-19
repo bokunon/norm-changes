@@ -7,11 +7,13 @@ import {
   detectPenaltyRisk,
   detectObligationLevel,
   detectRiskTypes,
+  normalizeRiskToSingle,
   buildSummary,
 } from "@/lib/analyze";
 import { notifySlack } from "@/lib/slack";
 import { generateReport } from "@/lib/report-ai";
 import { matchesNotificationFilter } from "@/lib/notification-filter-match";
+import { stripObligationAndLevelFromSummary } from "@/lib/risk-display";
 
 export interface RunAnalyzeOptions {
   /** 指定時はその NormSource のみ解析。省略時は NormChange がまだない全件 */
@@ -31,7 +33,18 @@ export interface RunAnalyzeError {
   error: string;
 }
 
-export type RunAnalyzeOutput = RunAnalyzeResult | RunAnalyzeError;
+/** Issue #40: AI レポートが作れない場合は登録せず処理を打ち切る */
+export interface RunAnalyzeAborted {
+  ok: false;
+  aborted: true;
+  reason: "AI_REPORT_UNAVAILABLE";
+}
+
+export type RunAnalyzeOutput = RunAnalyzeResult | RunAnalyzeError | RunAnalyzeAborted;
+
+export function isAnalyzeAborted(o: RunAnalyzeOutput): o is RunAnalyzeAborted {
+  return o.ok === false && "aborted" in o && o.aborted === true;
+}
 
 /**
  * 未解析の NormSource に対して NormChange を生成する。
@@ -87,13 +100,19 @@ export async function runAnalyzeForPendingSources(
 
   const created: string[] = [];
 
+  // Issue #40: AI レポートが作れない場合は NormChange を登録せず処理を打ち切る
+  if (sources.length > 0 && !process.env.OPENAI_API_KEY?.trim()) {
+    return { ok: false, aborted: true, reason: "AI_REPORT_UNAVAILABLE" };
+  }
+
   try {
     for (const src of sources) {
       const text = src.rawText ?? src.title;
       let summary = buildSummary(src.title, src.rawText);
       let obligationLevel = detectObligationLevel(text);
       let penaltyRisk = detectPenaltyRisk(text);
-      let riskTypes = detectRiskTypes(text);
+      // リスクは一種類のみの原理原則で正規化（キーワード検知で複数 true になり得るため）
+      let riskTypes = normalizeRiskToSingle(detectRiskTypes(text));
 
       let reportSummary: string | null = null;
       let reportActionItems: { text: string; source?: "amendment" | "existing" }[] | null = null;
@@ -112,32 +131,36 @@ export async function runAnalyzeForPendingSources(
         rawTextPrev: src.rawTextPrev,
       });
 
-      if (report) {
-        reportSummary = report.summary;
-        reportActionItems =
-          report.actionItems.length > 0
-            ? report.actionItems.map((a) => ({ text: a.text, source: a.source }))
-            : null;
-        reportDetailedRecommendations =
-          report.detailedRecommendations.length > 0
-            ? report.detailedRecommendations.map((r) => ({
-                action: r.action,
-                basis: r.basis,
-                source: r.source,
-              }))
-            : null;
-        if (report.summary) summary = report.summary;
-        if (report.obligationLevel) obligationLevel = report.obligationLevel;
-        if (report.riskLevel) penaltyRisk = report.riskLevel;
-        if (report.primaryRiskType) {
-          const p = report.primaryRiskType;
-          riskTypes = {
-            survival: p === "survival",
-            financial: p === "financial",
-            credit: p === "credit",
-            other: p === "other",
-          };
-        }
+      // Issue #40: AI レポートが 1 件でも作れなかったら登録せず打ち切り
+      if (!report) {
+        return { ok: false, aborted: true, reason: "AI_REPORT_UNAVAILABLE" };
+      }
+
+      reportSummary = report.summary;
+      reportActionItems =
+        report.actionItems.length > 0
+          ? report.actionItems.map((a) => ({ text: a.text, source: a.source }))
+          : null;
+      reportDetailedRecommendations =
+        report.detailedRecommendations.length > 0
+          ? report.detailedRecommendations.map((r) => ({
+              action: r.action,
+              basis: r.basis,
+              source: r.source,
+            }))
+          : null;
+      // 対応重要度は表示しない方針のため、AI が含めていても保存前に除去
+      if (report.summary) summary = stripObligationAndLevelFromSummary(report.summary) || report.summary;
+      if (report.obligationLevel) obligationLevel = report.obligationLevel;
+      if (report.riskLevel) penaltyRisk = report.riskLevel;
+      if (report.primaryRiskType) {
+        const p = report.primaryRiskType;
+        riskTypes = {
+          survival: p === "survival",
+          financial: p === "financial",
+          credit: p === "credit",
+          other: p === "other",
+        };
       }
 
       const change = await prisma.normChange.create({
@@ -147,7 +170,7 @@ export async function runAnalyzeForPendingSources(
           obligationLevel,
           penaltyRisk,
           penaltyDetail:
-            report?.penaltyDetailText ??
+            report.penaltyDetailText ??
             (penaltyRisk !== "NONE" ? "罰則・義務規定の可能性（要確認）" : null),
           riskSurvival: riskTypes.survival,
           riskFinancial: riskTypes.financial,
@@ -155,7 +178,7 @@ export async function runAnalyzeForPendingSources(
           riskOther: riskTypes.other,
           effectiveFrom: src.effectiveAt ?? null,
           deadline: null,
-          reportSummary,
+          reportSummary: reportSummary ?? undefined,
           reportActionItems: reportActionItems ?? undefined,
           reportDetailedRecommendations: reportDetailedRecommendations ?? undefined,
         },

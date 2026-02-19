@@ -33,8 +33,8 @@ async function main() {
 
   console.log("完了しました。");
   console.log("次に、取得可能な全期間を取り込む場合:");
-  console.log("  npm run refresh:ingest -- 20201124 <昨日のyyyyMMdd>");
-  console.log("（e-Gov bulkdownload の利用可能開始日は 2020年11月24日です）");
+  console.log("  npm run refresh:ingest -- 20240430 <昨日のyyyyMMdd>");
+  console.log("（取得開始日: 2024年4月30日）");
 }
 
 main()

@@ -45,6 +45,40 @@ Org ID は **Team / Account の Settings** の URL や API から確認できる
 
 「プッシュした Git ユーザ」と「Vercel のチームメンバー」が一致していなくても、このワークフローならデプロイできます。
 
+## トラブルシューティング
+
+### "Project not found" が出る
+
+`vercel pull` や `vercel deploy` で **Project not found** になる場合、GitHub の **VERCEL_ORG_ID** または **VERCEL_PROJECT_ID** が Vercel の現在のプロジェクトと一致していません。
+
+**対処**:
+
+1. ローカルでプロジェクトルートに移動し、**ID を再取得**する：
+   ```bash
+   npx vercel link
+   ```
+   対話で対象の Vercel プロジェクト（または新規作成）を選ぶ。
+
+2. `.vercel/project.json` を開き、**orgId** と **projectId** を確認する：
+   ```bash
+   cat .vercel/project.json
+   ```
+
+3. GitHub の **Settings → Secrets and variables → Actions** で、**VERCEL_ORG_ID** に `orgId`、**VERCEL_PROJECT_ID** に `projectId` を**正しく再登録**する（前の値の typo や、別プロジェクトの ID になっていないか確認）。
+
+4. **VERCEL_TOKEN** が、その Org / プロジェクトにアクセスできるトークンか確認する。[Vercel: Account → Tokens](https://vercel.com/account/tokens) で必要なら新しいトークンを作り、GitHub のシークレットを更新する。
+
+5. **ローカルで同じ設定が動くか確認**する（GitHub のシークレットと同一の値を使う）:
+   ```bash
+   export VERCEL_ORG_ID="ここに .vercel/project.json の orgId"
+   export VERCEL_PROJECT_ID="ここに .vercel/project.json の projectId"
+   export VERCEL_TOKEN="Vercel の Account → Tokens でコピーしたトークン"
+   npx vercel pull --yes --environment=production
+   ```
+   `Retrieving project…` のあとエラーにならず完了すれば、同じ 3 つを GitHub の **VERCEL_ORG_ID** / **VERCEL_PROJECT_ID** / **VERCEL_TOKEN** にそのまま登録すればよい。ローカルで「Project not found」になる場合は、トークンがそのチーム／プロジェクトにアクセスできるか、Vercel ダッシュボードで確認する。
+
+---
+
 ## 補足
 
 - プレビュー（main 以外のブランチ）も自動デプロイしたい場合は、ワークフローに `branches: [main]` 以外のトリガーを追加し、`--prod` を外したデプロイステップを追加すればよいです。

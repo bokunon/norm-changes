@@ -5,9 +5,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 // 型拡張: globalThis に prisma をぶら下げる
-// eslint-disable-next-line no-var, @typescript-eslint/no-explicit-any
 declare global {
-  // eslint-disable-next-line no-var, @typescript-eslint/no-explicit-any
   var prisma: PrismaClient | undefined;
 }
 

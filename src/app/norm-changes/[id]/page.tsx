@@ -76,6 +76,31 @@ export default function NormChangeDetailPage() {
       </div>
     );
 
+  // AI レポート未生成ならこのプロダクトは意味をなさないため、転けて停止し次回を待つ
+  const hasAiReport =
+    (item.reportSummary && item.reportSummary.trim() !== "") ||
+    (Array.isArray(item.reportActionItems) && item.reportActionItems.length > 0);
+  if (!hasAiReport) {
+    return (
+      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-6 flex flex-col items-center justify-center">
+        <div className="max-w-md text-center space-y-4">
+          <p className="text-lg font-medium text-zinc-800 dark:text-zinc-200">
+            AI レポートが未生成のため表示できません。
+          </p>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            管理者に API キー設定と再解析を依頼し、次回のアクセスをお待ちください。
+          </p>
+          <Link
+            href="/norm-changes"
+            className="inline-block text-blue-600 dark:text-blue-400 underline mt-4"
+          >
+            一覧へ戻る
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-6">
       <div className="max-w-3xl mx-auto">
@@ -133,9 +158,6 @@ export default function NormChangeDetailPage() {
                           （条文上に罰則の明示がないため要確認）
                         </span>
                       )}
-                      <span className="text-xs text-zinc-500 dark:text-zinc-400 block mt-0.5">
-                        条文に罰則・金銭規定等が明示されている場合の分類。手続き変更のみは「その他」。
-                      </span>
                     </>
                   );
                 })()}
@@ -172,98 +194,84 @@ export default function NormChangeDetailPage() {
               </div>
             )}
           </dl>
-          {/* Issue #12: AI レポート（サマリ・箇条書き・詳細＋根拠）を全文の上に表示 */}
+          {/* Issue #12: AI レポート（サマリ・箇条書き・詳細＋根拠）を全文の上に表示。未生成の場合は上で転けて停止済み */}
           <section className="mb-6">
             <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-2">
-              概要・何をしないといけないか
+              概要
             </h2>
-            {item.reportSummary ||
-            (item.reportActionItems && item.reportActionItems.length > 0) ? (
-              <div className="space-y-4">
-                {item.reportSummary && (
-                  <p className="whitespace-pre-wrap text-zinc-800 dark:text-zinc-200">
-                    {stripObligationAndLevelFromSummary(item.reportSummary) || item.reportSummary}
-                  </p>
-                )}
-                {/* Issue #37: 上＝取るべきアクション（ポイントのみ）、下＝推奨アクション（具体的）。元法 vs 改正を明示 */}
-                {item.reportActionItems && item.reportActionItems.length > 0 && (
+            <div className="space-y-4">
+              {item.reportSummary && (
+                <p className="whitespace-pre-wrap text-zinc-800 dark:text-zinc-200">
+                  {stripObligationAndLevelFromSummary(item.reportSummary) || item.reportSummary}
+                </p>
+              )}
+              {/* Issue #37: 上＝取るべきアクション（ポイントのみ）、下＝推奨アクション（具体的）。元法 vs 改正を明示 */}
+              {Array.isArray(item.reportActionItems) && item.reportActionItems.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">
+                    取るべきアクション（ポイント）
+                  </h3>
+                  <ul className="list-disc list-inside space-y-1.5 text-zinc-800 dark:text-zinc-200 text-sm">
+                    {item.reportActionItems.map((action, i) => {
+                      const text =
+                        typeof action === "string" ? action : action.text;
+                      const source =
+                        typeof action === "string" ? undefined : action.source;
+                      return (
+                        <li key={i} className="flex flex-wrap items-center gap-2">
+                          {source === "amendment" && (
+                            <span className="rounded bg-emerald-100 dark:bg-emerald-900/40 px-1.5 py-0.5 text-xs text-emerald-800 dark:text-emerald-200 shrink-0">
+                              改正
+                            </span>
+                          )}
+                          {source === "existing" && (
+                            <span className="rounded bg-zinc-200 dark:bg-zinc-600 px-1.5 py-0.5 text-xs text-zinc-700 dark:text-zinc-300 shrink-0">
+                              元法
+                            </span>
+                          )}
+                          <span>{text}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+              {Array.isArray(item.reportDetailedRecommendations) &&
+                item.reportDetailedRecommendations.length > 0 && (
                   <div>
                     <h3 className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">
-                      取るべきアクション（ポイント） — 今回の改正で変わった項目は「改正による」で表示
+                      推奨アクション（具体的）
                     </h3>
-                    <ul className="list-disc list-inside space-y-1.5 text-zinc-800 dark:text-zinc-200 text-sm">
-                      {item.reportActionItems.map((action, i) => {
-                        const text =
-                          typeof action === "string" ? action : action.text;
-                        const source =
-                          typeof action === "string" ? undefined : action.source;
-                        return (
-                          <li key={i} className="flex flex-wrap items-center gap-2">
-                            <span>{text}</span>
-                            {source === "amendment" && (
-                              <span className="rounded bg-emerald-100 dark:bg-emerald-900/40 px-1.5 py-0.5 text-xs text-emerald-800 dark:text-emerald-200">
-                                改正による
+                    <ul className="space-y-3">
+                      {item.reportDetailedRecommendations.map((rec, i) => (
+                        <li
+                          key={i}
+                          className="border-l-2 border-zinc-200 dark:border-zinc-600 pl-3 text-sm"
+                        >
+                          <p className="text-zinc-800 dark:text-zinc-200 font-medium flex flex-wrap items-center gap-2">
+                            {rec.source === "amendment" && (
+                              <span className="rounded bg-emerald-100 dark:bg-emerald-900/40 px-1.5 py-0.5 text-xs text-emerald-800 dark:text-emerald-200 shrink-0">
+                                改正
                               </span>
                             )}
-                            {source === "existing" && (
-                              <span className="rounded bg-zinc-200 dark:bg-zinc-600 px-1.5 py-0.5 text-xs text-zinc-700 dark:text-zinc-300">
+                            {rec.source === "existing" && (
+                              <span className="rounded bg-zinc-200 dark:bg-zinc-600 px-1.5 py-0.5 text-xs text-zinc-700 dark:text-zinc-300 shrink-0">
                                 元法
                               </span>
                             )}
-                          </li>
-                        );
-                      })}
+                            <span>{rec.action}</span>
+                          </p>
+                          {rec.basis && (
+                            <p className="text-zinc-500 dark:text-zinc-400 text-xs mt-0.5">
+                              根拠: {rec.basis}
+                            </p>
+                          )}
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 )}
-                {item.reportDetailedRecommendations &&
-                  item.reportDetailedRecommendations.length > 0 && (
-                    <div>
-                      <h3 className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">
-                        推奨アクション（具体的）
-                      </h3>
-                      <ul className="space-y-3">
-                        {item.reportDetailedRecommendations.map((rec, i) => (
-                          <li
-                            key={i}
-                            className="border-l-2 border-zinc-200 dark:border-zinc-600 pl-3 text-sm"
-                          >
-                            <p className="text-zinc-800 dark:text-zinc-200 font-medium">
-                              {rec.action}
-                            </p>
-                            <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                              {rec.source === "amendment" && (
-                                <span className="rounded bg-emerald-100 dark:bg-emerald-900/40 px-1.5 py-0.5 text-xs text-emerald-800 dark:text-emerald-200">
-                                  改正による
-                                </span>
-                              )}
-                              {rec.source === "existing" && (
-                                <span className="rounded bg-zinc-200 dark:bg-zinc-600 px-1.5 py-0.5 text-xs text-zinc-700 dark:text-zinc-300">
-                                  元法
-                                </span>
-                              )}
-                            </div>
-                            {rec.basis && (
-                              <p className="text-zinc-500 dark:text-zinc-400 text-xs mt-0.5">
-                                根拠: {rec.basis}
-                              </p>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p className="whitespace-pre-wrap text-zinc-800 dark:text-zinc-200">
-                  {stripObligationAndLevelFromSummary(item.summary) || item.summary}
-                </p>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  （AI レポート未生成。.env に OPENAI_API_KEY を設定し、開発サーバーを再起動したうえで「再解析」すると、サマリ・箇条書き・詳細＋根拠が表示されます）
-                </p>
-              </div>
-            )}
+            </div>
           </section>
           {item.normSource?.url && (
             <a

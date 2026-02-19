@@ -83,7 +83,7 @@ export default function NormChangesPage() {
     fetch(`/api/norm-changes?${params.toString()}`)
       .then((r) => r.json())
       .then((data) => {
-        if (data.ok) {
+        if (data.ok && Array.isArray(data.items)) {
           setItems(data.items);
           setNextCursor(data.nextCursor ?? null);
         } else {
@@ -105,7 +105,7 @@ export default function NormChangesPage() {
     fetch(`/api/norm-changes?${params.toString()}`)
       .then((r) => r.json())
       .then((data) => {
-        if (data.ok) {
+        if (data.ok && Array.isArray(data.items)) {
           setItems((prev) => [...prev, ...data.items]);
           setNextCursor(data.nextCursor ?? null);
         }
@@ -204,10 +204,10 @@ export default function NormChangesPage() {
                 >
                   <Link href={`/norm-changes/${item.id}`} className="block">
                     <h2 className="font-semibold text-zinc-900 dark:text-zinc-100 mb-1">
-                      {item.normSource?.title ?? item.summary.slice(0, 60)}
+                      {item.normSource?.title ?? (item.summary ?? "").slice(0, 60)}
                     </h2>
                     <p className="text-sm text-zinc-600 dark:text-zinc-400 line-clamp-2 mb-2">
-                      {stripObligationAndLevelFromSummary(item.summary) || item.summary}
+                      {stripObligationAndLevelFromSummary(item.summary) || (item.summary ?? "")}
                     </p>
                     <div className="flex flex-wrap gap-2 text-xs">
                       <span className="text-zinc-400">
@@ -232,7 +232,7 @@ export default function NormChangesPage() {
                       <span className="text-zinc-400">
                         公示日: {formatDate(item.normSource?.publishedAt ?? null)}
                       </span>
-                      {item.tags.length > 0 && (
+                      {Array.isArray(item.tags) && item.tags.length > 0 && (
                         <span className="text-zinc-400">
                           {item.tags.map((t) => t.labelJa).join(", ")}
                         </span>

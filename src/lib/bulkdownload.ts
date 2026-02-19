@@ -343,7 +343,7 @@ export async function fetchBulkdownloadList(
 
   const entries = zip.getEntries();
   const expectedCsv = csvFileNameFromDate(yyyyMMdd);
-  let csvEntry = entries.find((e) => e.entryName === expectedCsv || e.entryName.endsWith(".csv"));
+  const csvEntry = entries.find((e) => e.entryName === expectedCsv || e.entryName.endsWith(".csv"));
   if (!csvEntry || csvEntry.isDirectory) {
     return { ok: false, error: `ZIP 内に CSV が見つかりません（期待: ${expectedCsv} 等）` };
   }
@@ -385,7 +385,7 @@ export async function fetchBulkdownloadList(
     const dirName = pathParts.length >= 2 ? pathParts[0] : entry.entryName.replace(/\.xml$/i, "");
     const segs = dirName.split("_");
     if (segs.length < 3) continue;
-    const [lawId, _date, ...revisionParts] = segs;
+    const [lawId, , ...revisionParts] = segs;
     const amendmentRevisionId = revisionParts.join("_");
     const xmlBuffer = entry.getData();
     const xmlBuf = Buffer.isBuffer(xmlBuffer) ? xmlBuffer : Buffer.from(xmlBuffer);

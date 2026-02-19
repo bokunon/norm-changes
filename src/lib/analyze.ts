@@ -63,6 +63,18 @@ export interface RiskTypes {
   other: boolean;
 }
 
+/**
+ * リスクは一種類のみの原理原則に従い、複数 true の場合は厳しさ順で1つだけ残す。
+ * 厳しさ: 生存 > 金銭 > 信用 > その他。
+ */
+export function normalizeRiskToSingle(risk: RiskTypes): RiskTypes {
+  if (risk.survival) return { survival: true, financial: false, credit: false, other: false };
+  if (risk.financial) return { survival: false, financial: true, credit: false, other: false };
+  if (risk.credit) return { survival: false, financial: false, credit: true, other: false };
+  if (risk.other) return { survival: false, financial: false, credit: false, other: true };
+  return { survival: false, financial: false, credit: false, other: false };
+}
+
 /** リスク分類をキーワードで検知（#16 定義）。その他はキーワードでは判定せず AI で付与 */
 export function detectRiskTypes(text: string | null | undefined): RiskTypes {
   if (!text || typeof text !== "string") {

@@ -14,7 +14,7 @@ import {
   getLastSuccessfulIngestDate,
   setLastSuccessfulIngestDate,
 } from "@/lib/ingest-state";
-import { runAnalyzeForPendingSources } from "@/lib/run-analyze";
+import { runAnalyzeForPendingSources, isAnalyzeAborted } from "@/lib/run-analyze";
 
 function formatYyyyMMdd(d: Date): string {
   const y = d.getFullYear();
@@ -82,6 +82,12 @@ export async function GET(request: Request) {
     if (dates.length === 0) {
       // 取り込む日はなくても、未解析の NormSource が残っている可能性があるので analyze は実行する
       const analyzeResult = await runAnalyzeForPendingSources({});
+      if (isAnalyzeAborted(analyzeResult)) {
+        return NextResponse.json(
+          { ok: false, aborted: true, error: "AI レポートを生成できません。API キー設定を確認し、次回の実行をお待ちください。" },
+          { status: 503 }
+        );
+      }
       return NextResponse.json({
         ok: true,
         message: "取り込み対象日なし（前日まで済み）",
@@ -124,8 +130,14 @@ export async function GET(request: Request) {
       });
     }
 
-    // ingest で取り込んだ NormSource から NormChange を生成（一覧に表示されるようにする）
+    // ingest で取り込んだ NormSource から NormChange を生成（Issue #40: AI レポートが作れない場合は 503）
     const analyzeResult = await runAnalyzeForPendingSources({});
+    if (isAnalyzeAborted(analyzeResult)) {
+      return NextResponse.json(
+        { ok: false, aborted: true, error: "AI レポートを生成できません。API キー設定を確認し、次回の実行をお待ちください。" },
+        { status: 503 }
+      );
+    }
 
     return NextResponse.json({
       ok: true,

@@ -4,6 +4,7 @@
  * 出力: サマリ・箇条書きアクション・詳細推奨アクション＋根拠（構造化 JSON）
  */
 import OpenAI from "openai";
+import { stripObligationAndLevelFromSummary } from "@/lib/risk-display";
 
 export interface ReportInput {
   title: string;
@@ -45,7 +46,7 @@ const SYSTEM_PROMPT = `あなたは法令・省令・政令の改正内容を読
 
 JSON の形式:
 {
-  "summary": "1〜3文で、この改正の要点と企業が把握すべきことを要約",
+  "summary": "1〜3文で、この改正の要点と企業が把握すべきことを要約。**「対応重要度」や MUST/SHOULD/INFO の表記は一切含めない。概要の内容のみを書く。**",
   "actionItems": [
     { "text": "ポイント1の文言", "source": "amendment" または "existing" },
     ...
@@ -178,6 +179,7 @@ export async function generateReport(input: ReportInput): Promise<ReportOutput |
 
   try {
     // gpt-5-mini でレポート生成（指示遵守を優先）。コスト優先なら gpt-5-nano に変更可
+    // モデルによっては temperature はデフォルト(1)のみサポート。0.3 を指定すると 400 になるため省略
     const completion = await openai.chat.completions.create({
       model: MODEL,
       messages: [
@@ -185,7 +187,6 @@ export async function generateReport(input: ReportInput): Promise<ReportOutput |
         { role: "user", content: userContent },
       ],
       response_format: { type: "json_object" },
-      temperature: 0.3,
     });
 
     const raw = completion.choices[0]?.message?.content;
@@ -258,8 +259,11 @@ export async function generateReport(input: ReportInput): Promise<ReportOutput |
       }
     }
 
+    // 対応重要度は表示しない方針のため、AI が含めていても除去してから返す
+    const rawSummary = typeof parsed.summary === "string" ? parsed.summary : "";
+    const summary = stripObligationAndLevelFromSummary(rawSummary) || rawSummary;
     return {
-      summary: typeof parsed.summary === "string" ? parsed.summary : "",
+      summary,
       actionItems,
       detailedRecommendations,
       riskLevel:
@@ -273,7 +277,9 @@ export async function generateReport(input: ReportInput): Promise<ReportOutput |
       penaltyDetailText: penaltyDetailText ?? undefined,
       primaryRiskType,
     };
-  } catch {
+  } catch (err) {
+    // API キーは読めているが呼び出し失敗時は原因をログに残す（読み取り側の問題かどうか切り分け用）
+    console.error("[report-ai] generateReport 失敗:", err instanceof Error ? err.message : String(err));
     return null;
   }
 }

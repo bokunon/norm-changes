@@ -13,7 +13,7 @@
 import "dotenv/config";
 import { runIngestForDate } from "../src/lib/ingest-laws";
 import { setLastSuccessfulIngestDate } from "../src/lib/ingest-state";
-import { runAnalyzeForPendingSources } from "../src/lib/run-analyze";
+import { runAnalyzeForPendingSources, isAnalyzeAborted } from "../src/lib/run-analyze";
 
 /** yyyyMMdd の日付リストを生成（from ≦ to） */
 function dateRange(from: string, to: string): string[] {
@@ -46,6 +46,24 @@ function formatYyyyMMdd(d: Date): string {
   return `${y}${m}${day}`;
 }
 
+/** Issue #40: 次回実行予定日（明日）を JST で「○月○日」形式で返す */
+function getNextRunDateMessage(): string {
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const s = new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(tomorrow);
+  return s;
+}
+
+function logAbortedAndExit(): never {
+  const nextRun = getNextRunDateMessage();
+  console.error("\nAI レポート作れなかったからもう辞める。次は %s から実行よろしく。", nextRun);
+  process.exit(1);
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const from = args[0];
@@ -67,6 +85,8 @@ async function main() {
   let totalUpdated = 0;
   let totalLaws = 0;
   let failed = 0;
+  /** Issue #40: AI レポートが作れず打ち切った場合は true。finally でログを残して exit(1) */
+  let analyzeAborted = false;
 
   // 改正前全文取得で e-Gov に負荷をかけないよう 1 件あたり 500ms 待機
   const delayAfterPrevMs = 500;
@@ -81,11 +101,19 @@ async function main() {
         totalUpdated += result.updated;
         totalLaws += result.total;
         console.log("ok (total=%d created=%d updated=%d)", result.total, result.created, result.updated);
-        // 1日ごとに analyze を実行し、動作確認しやすくする（未解析の NormSource を NormChange に）
+        // 1日ごとに analyze を実行（Issue #40: AI レポートが作れない場合は打ち切り）
         const analyzeResult = await runAnalyzeForPendingSources({});
-        if (analyzeResult.ok && analyzeResult.created > 0) {
-          console.log(" → 解析: NormChange %d 件", analyzeResult.created);
-        } else if (!analyzeResult.ok) {
+        if (isAnalyzeAborted(analyzeResult)) {
+          analyzeAborted = true;
+          break;
+        }
+        if (analyzeResult.ok) {
+          if (analyzeResult.created > 0) {
+            console.log(" → 解析: NormChange %d 件", analyzeResult.created);
+          } else {
+            console.log(" → 解析: 0 件");
+          }
+        } else {
           console.warn(" → 解析エラー:", analyzeResult.error);
         }
       } else {
@@ -94,12 +122,18 @@ async function main() {
       }
     }
   } finally {
+    if (analyzeAborted) {
+      logAbortedAndExit();
+    }
     // ingest で例外や Ctrl+C が出ても、取り込んだ分は解析しておく（必ず実行）
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log("\n完了: %d 日処理, 法令 %d 件 (新規 %d / 更新 %d), 失敗 %d 日, 所要時間 %s 秒", dates.length, totalLaws, totalCreated, totalUpdated, failed, elapsed);
 
     console.log("\n未解析の NormSource を解析しています...");
     const analyzeResult = await runAnalyzeForPendingSources({});
+    if (isAnalyzeAborted(analyzeResult)) {
+      logAbortedAndExit();
+    }
     if (analyzeResult.ok) {
       if (analyzeResult.created > 0) {
         console.log("解析完了: NormChange %d 件作成", analyzeResult.created);

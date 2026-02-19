@@ -13,11 +13,11 @@ Tag / User / NotificationFilter は残し、**NormSource（および関連 NormC
    ```
 
 2. **取得可能な全期間で ingest を実行**  
-   e-Gov bulkdownload の利用可能開始日は **2020年11月24日** です。`to` は昨日の日付（yyyyMMdd）を指定してください。
+   取得開始日は **2024年4月30日**（20240430）です。`to` は昨日の日付（yyyyMMdd）を指定してください。
    ```bash
-   npm run refresh:ingest 20201124 <昨日のyyyyMMdd>
+   npm run refresh:ingest 20240430 <昨日のyyyyMMdd>
    ```
-   例: 今日が 2025年2月20日なら `npm run refresh:ingest 20201124 20250219`
+   例: 今日が 2025年2月20日なら `npm run refresh:ingest 20240430 20250219`
 
 3. 実行完了後、**IngestState が最後の日付まで更新**されるため、翌日以降は Vercel Cron が「続きから」前日分だけ取り込みます。
 
