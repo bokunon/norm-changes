@@ -16,7 +16,7 @@ export async function notifySlack(payload: {
   const text = [
     `*${payload.title}*`,
     payload.riskDetailText?.trim()
-      ? `⚠️ ${payload.riskDetailText.trim().slice(0, 500)}${payload.riskDetailText.trim().length > 500 ? "…" : ""}`
+      ? payload.riskDetailText.trim().slice(0, 500) + (payload.riskDetailText.trim().length > 500 ? "…" : "")
       : null,
     "",
     `<${payload.detailPageUrl}|詳細ページを開く>`,
