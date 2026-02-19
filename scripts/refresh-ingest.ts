@@ -13,6 +13,7 @@
 import "dotenv/config";
 import { runIngestForDate } from "../src/lib/ingest-laws";
 import { setLastSuccessfulIngestDate } from "../src/lib/ingest-state";
+import { runAnalyzeForPendingSources } from "../src/lib/run-analyze";
 
 /** yyyyMMdd の日付リストを生成（from ≦ to） */
 function dateRange(from: string, to: string): string[] {
@@ -87,6 +88,17 @@ async function main() {
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log("\n完了: %d 日処理, 法令 %d 件 (新規 %d / 更新 %d), 失敗 %d 日, 所要時間 %s 秒", dates.length, totalLaws, totalCreated, totalUpdated, failed, elapsed);
+
+  // NormChange がまだない NormSource を解析し、一覧に表示されるようにする
+  if (totalLaws > 0) {
+    console.log("\n未解析の NormSource を解析しています...");
+    const analyzeResult = await runAnalyzeForPendingSources({});
+    if (analyzeResult.ok) {
+      console.log("解析完了: NormChange %d 件作成", analyzeResult.created);
+    } else {
+      console.warn("解析でエラー:", analyzeResult.error);
+    }
+  }
 
   // 次回 cron が「続きから」取り込めるよう、最後に処理した日を記録する
   if (dates.length > 0) {

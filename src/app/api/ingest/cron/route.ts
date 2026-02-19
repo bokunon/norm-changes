@@ -6,6 +6,7 @@
  * - 取り込み範囲: 前回成功した日の翌日 〜 UTC の前日（コケた場合も次回は続きから再開）
  * - 初回や記録がない場合は「前日」のみ取り込む
  * - 手動で日付指定して試す場合は GET /api/ingest/laws?date=yyyyMMdd を使用すること
+ * - ingest 成功後、NormChange がまだない NormSource に対して自動で analyze を実行し一覧に表示されるようにする
  */
 import { NextResponse } from "next/server";
 import { runIngestForDate } from "@/lib/ingest-laws";
@@ -13,6 +14,7 @@ import {
   getLastSuccessfulIngestDate,
   setLastSuccessfulIngestDate,
 } from "@/lib/ingest-state";
+import { runAnalyzeForPendingSources } from "@/lib/run-analyze";
 
 function formatYyyyMMdd(d: Date): string {
   const y = d.getFullYear();
@@ -116,10 +118,17 @@ export async function GET(request: Request) {
       });
     }
 
+    // ingest で取り込んだ NormSource から NormChange を生成（一覧に表示されるようにする）
+    const analyzeResult = await runAnalyzeForPendingSources({});
+
     return NextResponse.json({
       ok: true,
       processed,
       lastSuccessfulDate: endDate,
+      analyze:
+        analyzeResult.ok
+          ? { ok: true, created: analyzeResult.created }
+          : { ok: false, error: analyzeResult.error },
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
