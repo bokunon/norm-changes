@@ -51,11 +51,7 @@ export async function GET(request: Request) {
       });
     }
 
-    return NextResponse.json({
-      ok: true,
-      date: yyyyMMdd,
-      ...result,
-    });
+    return NextResponse.json(result);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     return NextResponse.json(
