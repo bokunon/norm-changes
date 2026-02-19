@@ -16,6 +16,9 @@ type Detail = {
   penaltyDetail: string | null;
   effectiveFrom: string | null;
   deadline: string | null;
+  reportSummary: string | null;
+  reportActionItems: string[] | null;
+  reportDetailedRecommendations: { action: string; basis: string }[] | null;
   normSource: {
     id: string;
     type: string;
@@ -149,13 +152,66 @@ export default function NormChangeDetailPage() {
               </div>
             )}
           </dl>
+          {/* Issue #12: AI レポート（サマリ・箇条書き・詳細＋根拠）を全文の上に表示 */}
           <section className="mb-6">
             <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-2">
               概要・何をしないといけないか
             </h2>
-            <p className="whitespace-pre-wrap text-zinc-800 dark:text-zinc-200">
-              {item.summary}
-            </p>
+            {item.reportSummary || (item.reportActionItems && item.reportActionItems.length > 0) ? (
+              <div className="space-y-4">
+                {item.reportSummary && (
+                  <p className="whitespace-pre-wrap text-zinc-800 dark:text-zinc-200">
+                    {item.reportSummary}
+                  </p>
+                )}
+                {item.reportActionItems && item.reportActionItems.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">
+                      取るべきアクション（箇条書き）
+                    </h3>
+                    <ul className="list-disc list-inside space-y-1 text-zinc-800 dark:text-zinc-200 text-sm">
+                      {item.reportActionItems.map((action, i) => (
+                        <li key={i}>{action}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {item.reportDetailedRecommendations &&
+                  item.reportDetailedRecommendations.length > 0 && (
+                    <div>
+                      <h3 className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">
+                        詳細推奨アクションと根拠
+                      </h3>
+                      <ul className="space-y-3">
+                        {item.reportDetailedRecommendations.map((rec, i) => (
+                          <li
+                            key={i}
+                            className="border-l-2 border-zinc-200 dark:border-zinc-600 pl-3 text-sm"
+                          >
+                            <p className="text-zinc-800 dark:text-zinc-200 font-medium">
+                              {rec.action}
+                            </p>
+                            {rec.basis && (
+                              <p className="text-zinc-500 dark:text-zinc-400 text-xs mt-0.5">
+                                根拠: {rec.basis}
+                              </p>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="whitespace-pre-wrap text-zinc-800 dark:text-zinc-200">
+                  {item.summary}
+                </p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  （AI レポート未生成。.env に OPENAI_API_KEY を設定し、開発サーバーを再起動したうえで「再解析」すると、サマリ・箇条書き・詳細＋根拠が表示されます）
+                </p>
+              </div>
+            )}
           </section>
           {item.normSource?.url && (
             <a

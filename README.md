@@ -20,6 +20,21 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
    npx prisma migrate deploy
    ```
 3. （任意）Slack 通知を使う場合は `.env` に `SLACK_WEBHOOK_URL` を設定する。
+4. （任意・Issue #12）企業向けレポートで生成 AI を使う場合は `.env` に `OPENAI_API_KEY` を設定する。未設定ならキーワードのみで動作する。
+
+## OpenAI API Key（Issue #12）
+
+企業向けレポートの生成に OpenAI（gpt-4o-mini 等）を使う場合:
+
+1. **キー取得**: [OpenAI API Keys](https://platform.openai.com/api-keys) で API キーを作成する。
+2. **ローカル**: `.env` に次の 1 行を追加し、取得したキーを貼る（値は git に含めない）。
+   ```
+   OPENAI_API_KEY="sk-..."
+   ```
+3. **本番（Vercel）**: Vercel の **Settings → Environment Variables** で `OPENAI_API_KEY` を追加し、Production 用の値を設定する。
+4. **使用量**: OpenAI の Organization で [Usage limits](https://platform.openai.com/settings/organization/limits) を設定しておくと、予算を超えて課金されない。
+
+未設定の場合は生成 AI を使わず、キーワードベースの判定のみでレポート相当を出す。
 
 ## データ取得（ingest）のローカル確認（Issue #14）
 

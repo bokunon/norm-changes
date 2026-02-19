@@ -37,6 +37,9 @@ export async function GET(
       deadline: change.deadline?.toISOString() ?? null,
       createdAt: change.createdAt.toISOString(),
       updatedAt: change.updatedAt.toISOString(),
+      reportSummary: change.reportSummary ?? null,
+      reportActionItems: change.reportActionItems as string[] | null,
+      reportDetailedRecommendations: change.reportDetailedRecommendations as { action: string; basis: string }[] | null,
       normSource: change.normSource
         ? {
             id: change.normSource.id,

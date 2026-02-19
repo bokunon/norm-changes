@@ -45,6 +45,10 @@ model NormChange {
   deadline         DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+  // Issue #12: AI 生成レポート（未設定時は null）
+  reportSummary               String?   @db.Text // サマリ（箇条書きの要約）
+  reportActionItems           Json?     // 箇条書きアクション一覧 string[]
+  reportDetailedRecommendations Json?   // 詳細推奨アクション＋根拠 { action: string, basis: string }[]
 
   normSource   NormSource      @relation(fields: [normSourceId], references: [id], onDelete: Cascade)
   tags         NormChangeTag[]

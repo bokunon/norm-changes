@@ -1,6 +1,7 @@
 /**
  * NormSource から NormChange を生成する（MVP: 1ソース1変更点）
  * POST /api/analyze?normSourceId=xxx （省略時は NormChange がまだない NormSource を対象）
+ * Issue #12: OPENAI_API_KEY 設定時は AI でレポート生成。未設定時はキーワードのみ。
  * SLACK_WEBHOOK_URL 設定時は新規 NormChange ごとに Slack 通知
  */
 import { NextResponse } from "next/server";
@@ -12,12 +13,14 @@ import {
   buildSummary,
 } from "@/lib/analyze";
 import { notifySlack } from "@/lib/slack";
+import { generateReport } from "@/lib/report-ai";
 
 export async function POST(request: Request) {
   const { searchParams } = new URL(request.url);
   const normSourceId = searchParams.get("normSourceId");
+  const replace = searchParams.get("replace") === "1"; // 既存 NormChange を削除して再解析（洗い替え・テスト用）
 
-  const sources = normSourceId
+  let sources = normSourceId
     ? await prisma.normSource.findMany({ where: { id: normSourceId } })
     : await prisma.normSource.findMany({
         where: {
@@ -25,14 +28,47 @@ export async function POST(request: Request) {
         },
       });
 
+  if (replace && normSourceId && sources.length > 0) {
+    await prisma.normChange.deleteMany({ where: { normSourceId } });
+  } else if (replace && !normSourceId) {
+    return NextResponse.json(
+      { ok: false, error: "replace=1 の場合は normSourceId を指定してください" },
+      { status: 400 }
+    );
+  }
+
   const created: string[] = [];
 
+  try {
   for (const src of sources) {
     const text = src.rawText ?? src.title;
-    const penaltyRisk = detectPenaltyRisk(text);
-    const obligationLevel = detectObligationLevel(text);
+    let summary = buildSummary(src.title, src.rawText);
+    let obligationLevel = detectObligationLevel(text);
+    let penaltyRisk = detectPenaltyRisk(text);
     const riskTypes = detectRiskTypes(text);
-    const summary = buildSummary(src.title, src.rawText);
+
+    let reportSummary: string | null = null;
+    let reportActionItems: string[] | null = null;
+    let reportDetailedRecommendations: { action: string; basis: string }[] | null = null;
+
+    const report = await generateReport({
+      title: src.title,
+      type: src.type,
+      publishedAt: src.publishedAt.toISOString().slice(0, 10),
+      effectiveAt: src.effectiveAt?.toISOString().slice(0, 10) ?? null,
+      rawText: src.rawText,
+      rawTextPrev: src.rawTextPrev,
+    });
+
+    if (report) {
+      reportSummary = report.summary;
+      reportActionItems = report.actionItems.length > 0 ? report.actionItems : null;
+      reportDetailedRecommendations =
+        report.detailedRecommendations.length > 0 ? report.detailedRecommendations : null;
+      if (report.summary) summary = report.summary;
+      if (report.obligationLevel) obligationLevel = report.obligationLevel;
+      if (report.riskLevel) penaltyRisk = report.riskLevel;
+    }
 
     const change = await prisma.normChange.create({
       data: {
@@ -46,6 +82,9 @@ export async function POST(request: Request) {
         riskCredit: riskTypes.credit,
         effectiveFrom: src.effectiveAt ?? null,
         deadline: null,
+        reportSummary,
+        reportActionItems: reportActionItems ?? undefined,
+        reportDetailedRecommendations: reportDetailedRecommendations ?? undefined,
       },
     });
     created.push(change.id);
@@ -66,4 +105,11 @@ export async function POST(request: Request) {
     created: created.length,
     ids: created,
   });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return NextResponse.json(
+      { ok: false, error: message },
+      { status: 500 }
+    );
+  }
 }

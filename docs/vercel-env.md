@@ -33,4 +33,14 @@
 
 ---
 
+## Issue #12: 企業向けレポートで OpenAI を使う場合
+
+| Name | Value |
+|------|--------|
+| `OPENAI_API_KEY` | OpenAI の API キー（[API Keys](https://platform.openai.com/api-keys) で取得） |
+
+未設定の場合は生成 AI を使わず、キーワードのみでレポート相当を出します。本番でレポート生成を使う場合は Vercel の Environment Variables に上記を追加してください。
+
+---
+
 **注意**: `.env` は git に含めません。接続文字列にはパスワードが含まれるため、このファイルにも実際の値は記載しません。
