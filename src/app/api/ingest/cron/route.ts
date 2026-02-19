@@ -2,11 +2,16 @@
  * Issue #14: 一日1回の e-Gov ingest 用エンドポイント
  * Vercel Cron からのみ呼ばれる想定。CRON_SECRET で認証する。
  *
- * - 取り込む日付: UTC の前日（日本時間では実行時刻により前日〜当日のいずれか）
+ * - 取り込み範囲: 前回成功した日の翌日 〜 UTC の前日（コケた場合も次回は続きから再開）
+ * - 初回や記録がない場合は「前日」のみ取り込む
  * - 手動で日付指定して試す場合は GET /api/ingest/laws?date=yyyyMMdd を使用すること
  */
 import { NextResponse } from "next/server";
 import { runIngestForDate } from "@/lib/ingest-laws";
+import {
+  getLastSuccessfulIngestDate,
+  setLastSuccessfulIngestDate,
+} from "@/lib/ingest-state";
 
 function formatYyyyMMdd(d: Date): string {
   const y = d.getFullYear();
@@ -20,6 +25,33 @@ function yesterdayYyyyMMdd(): string {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() - 1);
   return formatYyyyMMdd(d);
+}
+
+/** yyyyMMdd を UTC Date に（日のみ解釈） */
+function parseYyyyMMdd(s: string): Date {
+  const y = parseInt(s.slice(0, 4), 10);
+  const m = parseInt(s.slice(4, 6), 10) - 1;
+  const d = parseInt(s.slice(6, 8), 10);
+  return new Date(Date.UTC(y, m, d));
+}
+
+/** 指定日の翌日を yyyyMMdd で返す */
+function nextDayYyyyMMdd(yyyyMMdd: string): string {
+  const d = parseYyyyMMdd(yyyyMMdd);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return formatYyyyMMdd(d);
+}
+
+/** startYyyyMMdd 以上 endYyyyMMdd 以下の日付を yyyyMMdd 配列で返す（昇順） */
+function dateRangeInclusive(startYyyyMMdd: string, endYyyyMMdd: string): string[] {
+  const out: string[] = [];
+  let cur = startYyyyMMdd;
+  while (cur <= endYyyyMMdd) {
+    out.push(cur);
+    if (cur === endYyyyMMdd) break;
+    cur = nextDayYyyyMMdd(cur);
+  }
+  return out;
 }
 
 export async function GET(request: Request) {
@@ -37,25 +69,61 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const yyyyMMdd = yesterdayYyyyMMdd();
+  const endDate = yesterdayYyyyMMdd();
 
   try {
-    const result = await runIngestForDate(yyyyMMdd);
+    const lastSuccess = await getLastSuccessfulIngestDate();
+    const startDate = lastSuccess ? nextDayYyyyMMdd(lastSuccess) : endDate;
+    const dates = dateRangeInclusive(startDate, endDate);
 
-    if (!result.ok) {
+    if (dates.length === 0) {
       return NextResponse.json({
-        ok: false,
-        date: yyyyMMdd,
-        error: result.error,
-        hint: "e-Gov bulkdownload の障害や指定日にデータがない可能性があります。",
+        ok: true,
+        message: "取り込み対象日なし（前日まで済み）",
+        lastSuccessfulDate: lastSuccess,
+        processed: [],
       });
     }
 
-    return NextResponse.json(result);
+    const processed: { date: string; total: number; created: number; updated: number }[] = [];
+    let failedDate: string | null = null;
+    let failedError: string | null = null;
+
+    for (const yyyyMMdd of dates) {
+      const result = await runIngestForDate(yyyyMMdd);
+      if (!result.ok) {
+        failedDate = yyyyMMdd;
+        failedError = result.error;
+        break;
+      }
+      await setLastSuccessfulIngestDate(yyyyMMdd);
+      processed.push({
+        date: result.date,
+        total: result.total,
+        created: result.created,
+        updated: result.updated,
+      });
+    }
+
+    if (failedDate) {
+      return NextResponse.json({
+        ok: false,
+        failedDate,
+        error: failedError,
+        hint: "次回 cron で前回の続きから再試行されます。",
+        processed,
+      });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      processed,
+      lastSuccessfulDate: endDate,
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     return NextResponse.json(
-      { ok: false, date: yyyyMMdd, error: message },
+      { ok: false, error: message },
       { status: 500 }
     );
   }

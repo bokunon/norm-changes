@@ -110,6 +110,13 @@ model UserFilter {
   @@index([userId])
 }
 
+// ingest cron の続きから再開するためのカーソル（1行のみ。id="default"）
+model IngestState {
+  id                   String   @id // "default"
+  lastSuccessfulDate   String?  // yyyyMMdd。この日まで取り込み済み。次回は翌日〜前日を取得
+  updatedAt            DateTime @updatedAt
+}
+
 // Issue #30: Slack 通知用フィルタ（新規 NormChange がこの条件に一致したときのみ通知）
 model NotificationFilter {
   id            String    @id @default(cuid())
