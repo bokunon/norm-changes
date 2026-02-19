@@ -13,14 +13,23 @@ import { prisma } from "../src/lib/prisma";
 
 async function main() {
   const normCount = await prisma.normSource.count();
-  const state = await prisma.ingestState.findUnique({ where: { id: "default" } });
 
   console.log("法令データのリセットを実行します。");
   console.log("  NormSource（および関連 NormChange, NormChangeTag）: %d 件削除", normCount);
-  console.log("  IngestState: %s", state ? "削除" : "なし（スキップ）");
 
   await prisma.normSource.deleteMany({});
-  await prisma.ingestState.deleteMany({});
+
+  try {
+    await prisma.ingestState.deleteMany({});
+    console.log("  IngestState: 削除");
+  } catch (e: unknown) {
+    const err = e as { code?: string };
+    if (err?.code === "P2021") {
+      console.log("  IngestState: テーブルが存在しないためスキップ");
+    } else {
+      throw e;
+    }
+  }
 
   console.log("完了しました。");
   console.log("次に、取得可能な全期間を取り込む場合:");
