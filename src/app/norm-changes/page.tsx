@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { getNormTypeLabelJa } from "@/lib/norm-types";
 
 type NormChangeItem = {
   id: string;
@@ -43,7 +44,8 @@ export default function NormChangesPage() {
     if (from) params.set("from", from.replace(/-/g, ""));
     if (to) params.set("to", to.replace(/-/g, ""));
     if (riskFilter.length > 0) params.set("risk", riskFilter.join(","));
-    setLoading(true);
+    // フィルタ変更時にローディング表示するため effect 内で true にしている
+    queueMicrotask(() => setLoading(true));
     fetch(`/api/norm-changes?${params.toString()}`)
       .then((r) => r.json())
       .then((data) => {
@@ -59,13 +61,25 @@ export default function NormChangesPage() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-6">
       <div className="max-w-4xl mx-auto">
-        <nav className="mb-6">
-          <Link
-            href="/"
-            className="text-sm text-zinc-600 dark:text-zinc-400 hover:underline"
+        {/* Issue #13: DB接続確認・アーキテクチャ概要をサブとしてナビに配置 */}
+        <nav className="mb-6 flex flex-wrap items-center gap-3 text-sm">
+          <span className="text-zinc-500 dark:text-zinc-400">サブ:</span>
+          <a
+            href="/api/db-health"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-zinc-600 dark:text-zinc-400 hover:underline"
           >
-            ← トップ
-          </Link>
+            DB 接続確認
+          </a>
+          <a
+            href="https://github.com/bokunon/spec-driven-app/blob/main/docs/architecture.md"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-zinc-600 dark:text-zinc-400 hover:underline"
+          >
+            アーキテクチャ概要
+          </a>
         </nav>
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-4">
           法令インパクト一覧
@@ -146,9 +160,13 @@ export default function NormChangesPage() {
                         )}
                       </span>
                     )}
+                    {item.normSource?.type && (
+                      <span className="rounded bg-zinc-200 dark:bg-zinc-700 px-1.5 py-0.5 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                        {getNormTypeLabelJa(item.normSource.type)}
+                      </span>
+                    )}
                     <span className="text-zinc-400">
-                      {item.normSource?.type} · 公示日:{" "}
-                      {formatDate(item.normSource?.publishedAt ?? null)}
+                      公示日: {formatDate(item.normSource?.publishedAt ?? null)}
                     </span>
                     {item.tags.length > 0 && (
                       <span className="text-zinc-400">

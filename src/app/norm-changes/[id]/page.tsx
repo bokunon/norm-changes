@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { getNormTypeLabelJa } from "@/lib/norm-types";
 
 type Detail = {
   id: string;
@@ -79,7 +80,7 @@ export default function NormChangeDetailPage() {
           <dl className="grid gap-2 text-sm mb-6">
             <div>
               <dt className="text-zinc-500">種別</dt>
-              <dd>{item.normSource?.type ?? "—"}</dd>
+              <dd>{getNormTypeLabelJa(item.normSource?.type)}</dd>
             </div>
             <div>
               <dt className="text-zinc-500">法令番号</dt>
