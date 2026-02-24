@@ -101,6 +101,8 @@ async function main() {
         totalUpdated += result.updated;
         totalLaws += result.total;
         console.log("ok (total=%d created=%d updated=%d)", result.total, result.created, result.updated);
+        // Issue #43: 1日ごとに IngestState を更新（statement timeout 時の進捗を残す）
+        await setLastSuccessfulIngestDate(date);
         // 1日ごとに analyze を実行（Issue #40: AI レポートが作れない場合は打ち切り）
         const analyzeResult = await runAnalyzeForPendingSources({});
         if (isAnalyzeAborted(analyzeResult)) {
