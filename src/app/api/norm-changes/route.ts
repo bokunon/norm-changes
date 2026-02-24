@@ -58,10 +58,21 @@ export async function GET(request: Request) {
     });
   }
 
+  // Issue #47: normSource は rawText/rawTextPrev を除外して取得（egress 削減・一覧では不要）
   const items = await prisma.normChange.findMany({
     where,
     include: {
-      normSource: true,
+      normSource: {
+        select: {
+          id: true,
+          type: true,
+          title: true,
+          number: true,
+          publishedAt: true,
+          effectiveAt: true,
+          url: true,
+        },
+      },
       tags: { include: { tag: true } },
     },
     orderBy: [
