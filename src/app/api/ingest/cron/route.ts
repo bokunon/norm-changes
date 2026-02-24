@@ -127,6 +127,7 @@ export async function GET(request: Request) {
         error: failedError,
         hint: "次回 cron で前回の続きから再試行されます。",
         processed,
+        _debug: { lastSuccessfulDate: lastSuccess, startDate, endDate, datesCount: dates.length },
       });
     }
 
