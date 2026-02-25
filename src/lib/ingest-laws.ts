@@ -49,8 +49,10 @@ export async function runIngestForDate(
   const delayMs = options?.delayAfterPrevMs ?? 0;
 
   for (const fields of items) {
+    // Issue #49: rawText/rawTextPrev は使用しないため id のみ取得（egress 削減）
     const existing = await prisma.normSource.findUnique({
       where: { externalId: fields.externalId ?? undefined },
+      select: { id: true },
     });
     // #25: 改正前全文を law_revisions / law_data で取得（ZIP の改正IDがある場合のみ）
     let rawTextPrev: string | null = null;

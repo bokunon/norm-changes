@@ -26,6 +26,10 @@ export interface RunAnalyzeResult {
   ok: true;
   created: number;
   ids: string[];
+  /** Issue #44: 施行日が今日より前のためスキップした件数（normSourceId 指定時は undefined） */
+  skippedEffectivePast?: number;
+  /** Issue #44: 既に NormChange がある件数（normSourceId 指定時は undefined） */
+  alreadyAnalyzed?: number;
 }
 
 export interface RunAnalyzeError {
@@ -68,6 +72,28 @@ export async function runAnalyzeForPendingSources(
   const { normSourceId = null, replace = false } = options;
 
   const todayStart = startOfTodayUtc();
+
+  // Issue #44: 統計用（normSourceId 指定時はスキップ）
+  let skippedEffectivePast: number | undefined;
+  let alreadyAnalyzed: number | undefined;
+  if (!normSourceId) {
+    const [skipped, analyzed] = await Promise.all([
+      prisma.normSource.count({
+        where: {
+          changes: { none: {} },
+          effectiveAt: { lt: todayStart },
+        },
+      }),
+      prisma.normSource.count({
+        where: {
+          changes: { some: {} },
+          OR: [{ effectiveAt: null }, { effectiveAt: { gte: todayStart } }],
+        },
+      }),
+    ]);
+    skippedEffectivePast = skipped;
+    alreadyAnalyzed = analyzed;
+  }
 
   let sources = normSourceId
     ? await prisma.normSource.findMany({ where: { id: normSourceId } })
@@ -226,7 +252,13 @@ export async function runAnalyzeForPendingSources(
       }
     }
 
-    return { ok: true, created: created.length, ids: created };
+    return {
+      ok: true,
+      created: created.length,
+      ids: created,
+      ...(skippedEffectivePast !== undefined && { skippedEffectivePast }),
+      ...(alreadyAnalyzed !== undefined && { alreadyAnalyzed }),
+    };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     return { ok: false, error: message };

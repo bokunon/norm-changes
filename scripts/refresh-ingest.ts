@@ -113,7 +113,16 @@ async function main() {
           if (analyzeResult.created > 0) {
             console.log(" → 解析: NormChange %d 件", analyzeResult.created);
           } else {
-            console.log(" → 解析: 0 件");
+            // Issue #44: 0 件の理由がログでわかるようにする
+            const parts: string[] = [];
+            if (analyzeResult.skippedEffectivePast !== undefined && analyzeResult.skippedEffectivePast > 0) {
+              parts.push(`施行日過去でスキップ ${analyzeResult.skippedEffectivePast} 件`);
+            }
+            if (analyzeResult.alreadyAnalyzed !== undefined && analyzeResult.alreadyAnalyzed > 0) {
+              parts.push(`既に解析済み ${analyzeResult.alreadyAnalyzed} 件`);
+            }
+            const suffix = parts.length > 0 ? `（${parts.join("、")}）` : "";
+            console.log(" → 解析: 0 件%s", suffix);
           }
         } else {
           console.warn(" → 解析エラー:", analyzeResult.error);
@@ -140,7 +149,16 @@ async function main() {
       if (analyzeResult.created > 0) {
         console.log("解析完了: NormChange %d 件作成", analyzeResult.created);
       } else {
-        console.log("解析完了: 未解析の NormSource はありませんでした（0 件）");
+        // Issue #44: 0 件の理由がログでわかるようにする
+        const parts: string[] = [];
+        if (analyzeResult.skippedEffectivePast !== undefined && analyzeResult.skippedEffectivePast > 0) {
+          parts.push(`施行日過去でスキップ ${analyzeResult.skippedEffectivePast} 件`);
+        }
+        if (analyzeResult.alreadyAnalyzed !== undefined && analyzeResult.alreadyAnalyzed > 0) {
+          parts.push(`既に解析済み ${analyzeResult.alreadyAnalyzed} 件`);
+        }
+        const suffix = parts.length > 0 ? `、${parts.join("、")}` : "";
+        console.log("解析完了: 未解析の NormSource はありませんでした（0 件%s）", suffix);
       }
     } else {
       console.warn("解析でエラー:", analyzeResult.error);

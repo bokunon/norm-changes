@@ -95,7 +95,12 @@ export async function GET(request: Request) {
         processed: [],
         analyze:
           analyzeResult.ok
-            ? { ok: true, created: analyzeResult.created }
+            ? {
+                ok: true,
+                created: analyzeResult.created,
+                skippedEffectivePast: analyzeResult.skippedEffectivePast,
+                alreadyAnalyzed: analyzeResult.alreadyAnalyzed,
+              }
             : { ok: false, error: analyzeResult.error },
       });
     }
@@ -146,7 +151,12 @@ export async function GET(request: Request) {
       lastSuccessfulDate: endDate,
       analyze:
         analyzeResult.ok
-          ? { ok: true, created: analyzeResult.created }
+          ? {
+              ok: true,
+              created: analyzeResult.created,
+              skippedEffectivePast: analyzeResult.skippedEffectivePast,
+              alreadyAnalyzed: analyzeResult.alreadyAnalyzed,
+            }
           : { ok: false, error: analyzeResult.error },
     });
   } catch (e) {
