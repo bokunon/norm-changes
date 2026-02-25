@@ -111,6 +111,19 @@ model UserFilter {
   @@index([userId])
 }
 
+// Issue #52: cron 実行ごとのログ（永続化して後から確認可能に）
+model CronExecutionLog {
+  id             String    @id @default(cuid())
+  startedAt      DateTime  // 実行開始日時
+  endedAt        DateTime? // 終了日時（完了時のみ）
+  result         String    // ok | error | aborted
+  processedDates Json      // 処理した日付一覧 string[]（yyyyMMdd）
+  errorMessage   String?   @db.Text // エラー時のメッセージ
+  durationMs     Int?      // 所要時間（ミリ秒）
+
+  @@index([startedAt])
+}
+
 // ingest cron の続きから再開するためのカーソル（1行のみ。id="default"）
 // Issue #50: lastSuccessfulDate は「この日まで ingest と analyze の両方が完了」を意味する
 model IngestState {

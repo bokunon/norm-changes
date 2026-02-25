@@ -6,8 +6,10 @@
  * - 取り込み範囲: 前回成功した日の翌日 〜 UTC の前日（コケた場合も次回は続きから再開）
  * - Issue #50: 各日ごとに ingest → analyze → setLastSuccess。lastSuccess は「ingest と analyze の両方完了」を意味
  * - ingest 成功後に analyze が失敗した場合、次回は analyze から再開（ingest はスキップ）
+ * - Issue #52: 実行開始・終了を CronExecutionLog に記録
  */
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { runIngestForDate } from "@/lib/ingest-laws";
 import {
   getLastSuccessfulIngestDate,
@@ -56,6 +58,22 @@ function dateRangeInclusive(startYyyyMMdd: string, endYyyyMMdd: string): string[
   return out;
 }
 
+/** Issue #52: cron 実行ログを完了して返す */
+async function finishCronLog(
+  logId: string,
+  startedAt: Date,
+  result: "ok" | "error" | "aborted",
+  processedDates: string[],
+  errorMessage: string | null
+): Promise<void> {
+  const endedAt = new Date();
+  const durationMs = endedAt.getTime() - startedAt.getTime();
+  await prisma.cronExecutionLog.update({
+    where: { id: logId },
+    data: { endedAt, result, processedDates, errorMessage, durationMs },
+  });
+}
+
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
   const authHeader = request.headers.get("authorization");
@@ -72,6 +90,16 @@ export async function GET(request: Request) {
   }
 
   const endDate = yesterdayYyyyMMdd();
+  const startedAt = new Date();
+
+  // Issue #52: 実行開始を記録
+  const log = await prisma.cronExecutionLog.create({
+    data: {
+      startedAt,
+      result: "ok",
+      processedDates: [],
+    },
+  });
 
   try {
     const lastSuccess = await getLastSuccessfulIngestDate();
@@ -82,11 +110,13 @@ export async function GET(request: Request) {
       // 取り込む日はなくても、bulkdownloadDate が null の既存データ等で未解析が残っている可能性があるので analyze を実行
       const analyzeResult = await runAnalyzeForPendingSources({});
       if (isAnalyzeAborted(analyzeResult)) {
+        await finishCronLog(log.id, startedAt, "aborted", [], "AI レポートを生成できません。API キー設定を確認し、次回の実行をお待ちください。");
         return NextResponse.json(
           { ok: false, aborted: true, error: "AI レポートを生成できません。API キー設定を確認し、次回の実行をお待ちください。" },
           { status: 503 }
         );
       }
+      await finishCronLog(log.id, startedAt, "ok", [], null);
       return NextResponse.json({
         ok: true,
         message: "取り込み対象日なし（前日まで済み）",
@@ -143,7 +173,10 @@ export async function GET(request: Request) {
       await setLastSuccessfulIngestDate(yyyyMMdd);
     }
 
+    const processedDates = processed.map((p) => p.date);
+
     if (failedDate) {
+      await finishCronLog(log.id, startedAt, "error", processedDates, failedError);
       return NextResponse.json({
         ok: false,
         failedDate,
@@ -155,6 +188,7 @@ export async function GET(request: Request) {
     }
 
     const lastProcessed = processed[processed.length - 1];
+    await finishCronLog(log.id, startedAt, "ok", processedDates, null);
     return NextResponse.json({
       ok: true,
       processed,
@@ -166,6 +200,7 @@ export async function GET(request: Request) {
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
+    await finishCronLog(log.id, startedAt, "error", [], message).catch(() => {});
     return NextResponse.json(
       { ok: false, error: message },
       { status: 500 }

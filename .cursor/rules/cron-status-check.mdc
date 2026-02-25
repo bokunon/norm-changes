@@ -1,0 +1,22 @@
+---
+description: cron 状況確認時はログを優先して確認する
+alwaysApply: true
+---
+
+# cron 状況確認時のルール
+
+ユーザーが「様子見て」「cron の状況」「動いてる？」「cron 動いてる？」等と聞いた場合:
+
+1. **まず CronExecutionLog のログを確認する**
+   - 状況証拠（lastSuccessfulDate が古い等）の推測ではなく、**ログの実データ**を確認してから回答する。
+
+2. **ログの確認方法**
+   - **ローカル**: `npx tsx scripts/view-cron-logs.ts` で DB から直接取得
+   - **本番**: `.env` に `SITE_URL` と `CRON_SECRET` を設定した上で `npx tsx scripts/view-cron-logs.ts`（API 経由）
+   - **API 直接**: `GET /api/ingest/cron-logs`（CRON_SECRET で認証）
+
+3. **ログの見方**
+   - `result`: ok / error / aborted
+   - `startedAt`, `endedAt`, `durationMs`: 実行日時・所要時間
+   - `processedDates`: 処理した日付一覧
+   - `errorMessage`: エラー時のメッセージ
