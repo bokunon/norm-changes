@@ -20,6 +20,8 @@ export interface RunAnalyzeOptions {
   normSourceId?: string | null;
   /** true のとき既存 NormChange を削除して再解析（normSourceId 指定時のみ有効） */
   replace?: boolean;
+  /** Issue #50: 指定時はこの bulkdownload 日付（yyyyMMdd）の NormSource のみ対象。cron の日単位連動用 */
+  bulkdownloadDate?: string | null;
 }
 
 export interface RunAnalyzeResult {
@@ -69,7 +71,7 @@ function startOfTodayUtc(): Date {
 export async function runAnalyzeForPendingSources(
   options: RunAnalyzeOptions = {}
 ): Promise<RunAnalyzeOutput> {
-  const { normSourceId = null, replace = false } = options;
+  const { normSourceId = null, replace = false, bulkdownloadDate = null } = options;
 
   const todayStart = startOfTodayUtc();
 
@@ -77,15 +79,20 @@ export async function runAnalyzeForPendingSources(
   let skippedEffectivePast: number | undefined;
   let alreadyAnalyzed: number | undefined;
   if (!normSourceId) {
+    const baseWhere = {
+      ...(bulkdownloadDate ? { bulkdownloadDate } : {}),
+    };
     const [skipped, analyzed] = await Promise.all([
       prisma.normSource.count({
         where: {
+          ...baseWhere,
           changes: { none: {} },
           effectiveAt: { lt: todayStart },
         },
       }),
       prisma.normSource.count({
         where: {
+          ...baseWhere,
           changes: { some: {} },
           OR: [{ effectiveAt: null }, { effectiveAt: { gte: todayStart } }],
         },
@@ -95,18 +102,18 @@ export async function runAnalyzeForPendingSources(
     alreadyAnalyzed = analyzed;
   }
 
-  let sources = normSourceId
-    ? await prisma.normSource.findMany({ where: { id: normSourceId } })
-    : await prisma.normSource.findMany({
-        where: {
-          changes: { none: {} },
-          // 施行日が今日以降のものだけ（施行日未定＝null も対象）
-          OR: [
-            { effectiveAt: null },
-            { effectiveAt: { gte: todayStart } },
-          ],
-        },
-      });
+  const baseWhere = normSourceId
+    ? { id: normSourceId }
+    : {
+        changes: { none: {} },
+        // 施行日が今日以降のものだけ（施行日未定＝null も対象）。API コスト削減のため
+        OR: [{ effectiveAt: null }, { effectiveAt: { gte: todayStart } }],
+        ...(bulkdownloadDate ? { bulkdownloadDate } : {}),
+      };
+
+  let sources = await prisma.normSource.findMany({
+    where: baseWhere,
+  });
 
   // replace=1 のとき、削除前にタグID一覧を控えておく（再解析後にタグを引き継ぎ、通知フィルタが一致するようにする）
   let tagIdsToRestore: string[] = [];

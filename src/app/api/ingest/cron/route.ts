@@ -4,9 +4,8 @@
  * 実行時刻: 日本時間 7:00（vercel.json の schedule: "0 22 * * *" = UTC 22:00）
  *
  * - 取り込み範囲: 前回成功した日の翌日 〜 UTC の前日（コケた場合も次回は続きから再開）
- * - 初回や記録がない場合は「前日」のみ取り込む
- * - 手動で日付指定して試す場合は GET /api/ingest/laws?date=yyyyMMdd を使用すること
- * - ingest 成功後、NormChange がまだない NormSource に対して自動で analyze を実行し一覧に表示されるようにする
+ * - Issue #50: 各日ごとに ingest → analyze → setLastSuccess。lastSuccess は「ingest と analyze の両方完了」を意味
+ * - ingest 成功後に analyze が失敗した場合、次回は analyze から再開（ingest はスキップ）
  */
 import { NextResponse } from "next/server";
 import { runIngestForDate } from "@/lib/ingest-laws";
@@ -80,7 +79,7 @@ export async function GET(request: Request) {
     const dates = dateRangeInclusive(startDate, endDate);
 
     if (dates.length === 0) {
-      // 取り込む日はなくても、未解析の NormSource が残っている可能性があるので analyze は実行する
+      // 取り込む日はなくても、bulkdownloadDate が null の既存データ等で未解析が残っている可能性があるので analyze を実行
       const analyzeResult = await runAnalyzeForPendingSources({});
       if (isAnalyzeAborted(analyzeResult)) {
         return NextResponse.json(
@@ -105,7 +104,8 @@ export async function GET(request: Request) {
       });
     }
 
-    const processed: { date: string; total: number; created: number; updated: number }[] = [];
+    // Issue #50: 日単位で ingest → analyze → setLastSuccess。analyze 失敗時は lastSuccess を進めず次回再試行
+    const processed: { date: string; total: number; created: number; updated: number; analyzeCreated?: number }[] = [];
     let failedDate: string | null = null;
     let failedError: string | null = null;
 
@@ -116,13 +116,31 @@ export async function GET(request: Request) {
         failedError = result.error;
         break;
       }
-      await setLastSuccessfulIngestDate(yyyyMMdd);
       processed.push({
         date: result.date,
         total: result.total,
         created: result.created,
         updated: result.updated,
       });
+
+      // その日の NormSource を解析（bulkdownloadDate でスコープ）
+      const analyzeResult = await runAnalyzeForPendingSources({ bulkdownloadDate: yyyyMMdd });
+      if (isAnalyzeAborted(analyzeResult)) {
+        failedDate = yyyyMMdd;
+        failedError = "AI レポートを生成できません";
+        break;
+      }
+      if (!analyzeResult.ok) {
+        failedDate = yyyyMMdd;
+        failedError = analyzeResult.error;
+        break;
+      }
+      if (processed.length > 0) {
+        processed[processed.length - 1].analyzeCreated = analyzeResult.created;
+      }
+
+      // ingest と analyze の両方が成功したときのみ lastSuccess を進める
+      await setLastSuccessfulIngestDate(yyyyMMdd);
     }
 
     if (failedDate) {
@@ -130,34 +148,21 @@ export async function GET(request: Request) {
         ok: false,
         failedDate,
         error: failedError,
-        hint: "次回 cron で前回の続きから再試行されます。",
+        hint: "次回 cron で前回の続きから再試行されます（ingest 済みの場合は analyze から）。",
         processed,
         _debug: { lastSuccessfulDate: lastSuccess, startDate, endDate, datesCount: dates.length },
       });
     }
 
-    // ingest で取り込んだ NormSource から NormChange を生成（Issue #40: AI レポートが作れない場合は 503）
-    const analyzeResult = await runAnalyzeForPendingSources({});
-    if (isAnalyzeAborted(analyzeResult)) {
-      return NextResponse.json(
-        { ok: false, aborted: true, error: "AI レポートを生成できません。API キー設定を確認し、次回の実行をお待ちください。" },
-        { status: 503 }
-      );
-    }
-
+    const lastProcessed = processed[processed.length - 1];
     return NextResponse.json({
       ok: true,
       processed,
-      lastSuccessfulDate: endDate,
+      lastSuccessfulDate: lastProcessed?.date ?? endDate,
       analyze:
-        analyzeResult.ok
-          ? {
-              ok: true,
-              created: analyzeResult.created,
-              skippedEffectivePast: analyzeResult.skippedEffectivePast,
-              alreadyAnalyzed: analyzeResult.alreadyAnalyzed,
-            }
-          : { ok: false, error: analyzeResult.error },
+        lastProcessed?.analyzeCreated !== undefined
+          ? { ok: true, created: lastProcessed.analyzeCreated }
+          : { ok: true, created: 0 },
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

@@ -91,56 +91,61 @@ async function main() {
   // 改正前全文取得で e-Gov に負荷をかけないよう 1 件あたり 500ms 待機
   const delayAfterPrevMs = 500;
 
+  /** Issue #50: ingest と analyze の両方が成功した日のみ記録。analyze 失敗時は次回その日から再開 */
+  let lastCompletedDate: string | null = null;
+
   try {
     for (let i = 0; i < dates.length; i++) {
       const date = dates[i];
       process.stdout.write(`[${i + 1}/${dates.length}] ${date} ... `);
       const result = await runIngestForDate(date, { delayAfterPrevMs });
-      if (result.ok) {
-        totalCreated += result.created;
-        totalUpdated += result.updated;
-        totalLaws += result.total;
-        console.log("ok (total=%d created=%d updated=%d)", result.total, result.created, result.updated);
-        // Issue #43: 1日ごとに IngestState を更新（statement timeout 時の進捗を残す）
-        await setLastSuccessfulIngestDate(date);
-        // 1日ごとに analyze を実行（Issue #40: AI レポートが作れない場合は打ち切り）
-        const analyzeResult = await runAnalyzeForPendingSources({});
-        if (isAnalyzeAborted(analyzeResult)) {
-          analyzeAborted = true;
-          break;
-        }
-        if (analyzeResult.ok) {
-          if (analyzeResult.created > 0) {
-            console.log(" → 解析: NormChange %d 件", analyzeResult.created);
-          } else {
-            // Issue #44: 0 件の理由がログでわかるようにする
-            const parts: string[] = [];
-            if (analyzeResult.skippedEffectivePast !== undefined && analyzeResult.skippedEffectivePast > 0) {
-              parts.push(`施行日過去でスキップ ${analyzeResult.skippedEffectivePast} 件`);
-            }
-            if (analyzeResult.alreadyAnalyzed !== undefined && analyzeResult.alreadyAnalyzed > 0) {
-              parts.push(`既に解析済み ${analyzeResult.alreadyAnalyzed} 件`);
-            }
-            const suffix = parts.length > 0 ? `（${parts.join("、")}）` : "";
-            console.log(" → 解析: 0 件%s", suffix);
-          }
-        } else {
-          console.warn(" → 解析エラー:", analyzeResult.error);
-        }
-      } else {
+      if (!result.ok) {
         failed += 1;
         console.log("失敗: %s", result.error);
+        continue;
       }
+      totalCreated += result.created;
+      totalUpdated += result.updated;
+      totalLaws += result.total;
+      console.log("ok (total=%d created=%d updated=%d)", result.total, result.created, result.updated);
+
+      // Issue #50: その日の NormSource のみ解析（bulkdownloadDate でスコープ）
+      const analyzeResult = await runAnalyzeForPendingSources({ bulkdownloadDate: date });
+      if (isAnalyzeAborted(analyzeResult)) {
+        analyzeAborted = true;
+        break;
+      }
+      if (!analyzeResult.ok) {
+        console.warn(" → 解析エラー:", analyzeResult.error, "（次回この日から再開）");
+        break;
+      }
+      if (analyzeResult.created > 0) {
+        console.log(" → 解析: NormChange %d 件", analyzeResult.created);
+      } else {
+        const parts: string[] = [];
+        if (analyzeResult.skippedEffectivePast !== undefined && analyzeResult.skippedEffectivePast > 0) {
+          parts.push(`施行日過去でスキップ ${analyzeResult.skippedEffectivePast} 件`);
+        }
+        if (analyzeResult.alreadyAnalyzed !== undefined && analyzeResult.alreadyAnalyzed > 0) {
+          parts.push(`既に解析済み ${analyzeResult.alreadyAnalyzed} 件`);
+        }
+        const suffix = parts.length > 0 ? `（${parts.join("、")}）` : "";
+        console.log(" → 解析: 0 件%s", suffix);
+      }
+
+      // ingest と analyze の両方成功時のみ記録
+      await setLastSuccessfulIngestDate(date);
+      lastCompletedDate = date;
     }
   } finally {
     if (analyzeAborted) {
       logAbortedAndExit();
     }
-    // ingest で例外や Ctrl+C が出ても、取り込んだ分は解析しておく（必ず実行）
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log("\n完了: %d 日処理, 法令 %d 件 (新規 %d / 更新 %d), 失敗 %d 日, 所要時間 %s 秒", dates.length, totalLaws, totalCreated, totalUpdated, failed, elapsed);
 
-    console.log("\n未解析の NormSource を解析しています...");
+    // bulkdownloadDate が null の既存データ等、残りの未解析を解析
+    console.log("\n未解析の NormSource（bulkdownloadDate 未設定等）を解析しています...");
     const analyzeResult = await runAnalyzeForPendingSources({});
     if (isAnalyzeAborted(analyzeResult)) {
       logAbortedAndExit();
@@ -149,7 +154,6 @@ async function main() {
       if (analyzeResult.created > 0) {
         console.log("解析完了: NormChange %d 件作成", analyzeResult.created);
       } else {
-        // Issue #44: 0 件の理由がログでわかるようにする
         const parts: string[] = [];
         if (analyzeResult.skippedEffectivePast !== undefined && analyzeResult.skippedEffectivePast > 0) {
           parts.push(`施行日過去でスキップ ${analyzeResult.skippedEffectivePast} 件`);
@@ -165,11 +169,8 @@ async function main() {
     }
   }
 
-  // 次回 cron が「続きから」取り込めるよう、最後に処理した日を記録する
-  if (dates.length > 0) {
-    const lastDate = dates[dates.length - 1];
-    await setLastSuccessfulIngestDate(lastDate);
-    console.log("IngestState を %s まで取り込み済みに更新しました。", lastDate);
+  if (lastCompletedDate) {
+    console.log("IngestState を %s まで（ingest と analyze 両方完了）に更新しました。", lastCompletedDate);
   }
 }
 

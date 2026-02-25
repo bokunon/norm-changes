@@ -67,6 +67,7 @@ export async function runIngestForDate(
         rawTextPrev = null;
       }
     }
+    // Issue #50: bulkdownloadDate で analyze の日単位スコープを可能にする
     const updateData = {
       title: fields.title,
       number: fields.number,
@@ -75,6 +76,7 @@ export async function runIngestForDate(
       url: fields.url,
       rawText: fields.rawText ?? null,
       rawTextPrev: rawTextPrev ?? null,
+      bulkdownloadDate: yyyyMMdd,
     };
     if (existing) {
       await prisma.normSource.update({
@@ -95,6 +97,7 @@ export async function runIngestForDate(
           url: fields.url,
           rawText: fields.rawText ?? null,
           rawTextPrev: rawTextPrev ?? null,
+          bulkdownloadDate: yyyyMMdd,
         },
       });
       created += 1;

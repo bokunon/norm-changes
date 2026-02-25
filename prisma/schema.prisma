@@ -12,19 +12,20 @@ datasource db {
 
 // 法令・ガイドライン等の一次情報（法律・政令・省令・ガイドライン等）
 model NormSource {
-  id          String   @id @default(cuid())
-  externalId  String?  @unique // e-Gov 法令API の LawId など（重複登録防止用）
-  type        String   // LAW, ORDINANCE, REGULATION, GUIDELINE, NOTICE, OTHER
-  title       String
-  number      String?  // 法令番号など
-  publisher   String?  // 所管省庁
-  publishedAt DateTime
-  effectiveAt DateTime?
-  url         String?
-  rawText     String?  @db.Text // 本文（改正後全文。Issue #24）
-  rawTextPrev String?  @db.Text // 改正前全文（比較用。Issue #25）
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id               String   @id @default(cuid())
+  externalId       String?  @unique // e-Gov 法令API の LawId など（重複登録防止用）
+  type             String   // LAW, ORDINANCE, REGULATION, GUIDELINE, NOTICE, OTHER
+  title            String
+  number           String?  // 法令番号など
+  publisher        String?  // 所管省庁
+  publishedAt      DateTime
+  effectiveAt      DateTime?
+  url              String?
+  rawText          String?  @db.Text // 本文（改正後全文。Issue #24）
+  rawTextPrev      String?  @db.Text // 改正前全文（比較用。Issue #25）
+  bulkdownloadDate String?  // yyyyMMdd。この bulkdownload 日付で取り込んだ。Issue #50 で analyze の日単位スコープ用
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   changes NormChange[]
 }
@@ -111,9 +112,10 @@ model UserFilter {
 }
 
 // ingest cron の続きから再開するためのカーソル（1行のみ。id="default"）
+// Issue #50: lastSuccessfulDate は「この日まで ingest と analyze の両方が完了」を意味する
 model IngestState {
   id                   String   @id // "default"
-  lastSuccessfulDate   String?  // yyyyMMdd。この日まで取り込み済み。次回は翌日〜前日を取得
+  lastSuccessfulDate   String?  // yyyyMMdd。この日まで ingest と analyze の両方完了。次回は翌日〜前日を取得
   updatedAt            DateTime @updatedAt
 }
 
