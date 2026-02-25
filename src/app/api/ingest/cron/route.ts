@@ -116,7 +116,9 @@ export async function GET(request: Request) {
           { status: 503 }
         );
       }
-      await finishCronLog(log.id, startedAt, "ok", [], null);
+      const logResult = analyzeResult.ok ? "ok" : "error";
+      const logError = analyzeResult.ok ? null : analyzeResult.error;
+      await finishCronLog(log.id, startedAt, logResult, [], logError);
       return NextResponse.json({
         ok: true,
         message: "取り込み対象日なし（前日まで済み）",
