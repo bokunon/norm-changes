@@ -35,34 +35,15 @@ const RISK_LABELS: { key: "survival" | "financial" | "credit" | "other"; label: 
   { key: "other", label: "その他" },
 ];
 
-/** Issue #32: 生成API利用状況をナビに表示するインラインコンポーネント */
-function OpenAIStatusInline() {
-  const [status, setStatus] = useState<{ configured: boolean; usageUrl?: string } | null>(null);
-  useEffect(() => {
-    fetch("/api/openai-usage")
-      .then((r) => r.json())
-      .then((data) => setStatus({ configured: data.configured, usageUrl: data.usageUrl }))
-      .catch(() => setStatus(null));
-  }, []);
-  if (status === null) return null;
-  return (
-    <span className="text-zinc-500 dark:text-zinc-400">
-      生成API:{" "}
-      {status.configured ? (
-        <a
-          href={status.usageUrl ?? "https://platform.openai.com/usage"}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-zinc-600 dark:text-zinc-400 hover:underline"
-        >
-          設定済み（利用量）
-        </a>
-      ) : (
-        "未設定"
-      )}
-    </span>
-  );
+/** effectiveAt から施行済か未施行かを判定 */
+function isEnforced(effectiveAt: string | null): boolean {
+  if (!effectiveAt) return false;
+  const today = new Date();
+  const todayStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  return new Date(effectiveAt) <= todayStart;
 }
+
+type EnforcementFilter = "not_yet" | "enforced" | "all";
 
 export default function NormChangesPage() {
   const [items, setItems] = useState<NormChangeItem[]>([]);
@@ -71,13 +52,24 @@ export default function NormChangesPage() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [riskFilter, setRiskFilter] = useState<("survival" | "financial" | "credit" | "other")[]>([]);
+  // Issue #54: デフォルトは未施行・生存・金銭
+  const [enforcement, setEnforcement] = useState<EnforcementFilter>("not_yet");
+  const [riskFilter, setRiskFilter] = useState<("survival" | "financial" | "credit" | "other")[]>([
+    "survival",
+    "financial",
+  ]);
 
-  useEffect(() => {
+  const buildParams = () => {
     const params = new URLSearchParams();
     if (from) params.set("from", from.replace(/-/g, ""));
     if (to) params.set("to", to.replace(/-/g, ""));
+    if (enforcement !== "all") params.set("enforcement", enforcement);
     if (riskFilter.length > 0) params.set("risk", riskFilter.join(","));
+    return params;
+  };
+
+  useEffect(() => {
+    const params = buildParams();
     queueMicrotask(() => setLoading(true));
     setNextCursor(null);
     fetch(`/api/norm-changes?${params.toString()}`)
@@ -92,15 +84,12 @@ export default function NormChangesPage() {
         }
       })
       .finally(() => setLoading(false));
-  }, [from, to, riskFilter]);
+  }, [from, to, enforcement, riskFilter]);
 
   const loadMore = () => {
     if (!nextCursor || loadingMore) return;
-    const params = new URLSearchParams();
+    const params = buildParams();
     params.set("cursor", nextCursor);
-    if (from) params.set("from", from.replace(/-/g, ""));
-    if (to) params.set("to", to.replace(/-/g, ""));
-    if (riskFilter.length > 0) params.set("risk", riskFilter.join(","));
     setLoadingMore(true);
     fetch(`/api/norm-changes?${params.toString()}`)
       .then((r) => r.json())
@@ -119,40 +108,26 @@ export default function NormChangesPage() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-6">
       <div className="max-w-4xl mx-auto">
-        {/* Issue #13: DB接続確認・アーキテクチャ概要をサブとしてナビに配置。Issue #33: サブを先頭以外に（右側に配置） */}
-        <nav className="mb-6 flex flex-wrap items-center gap-3 text-sm">
-          <a
-            href="/settings"
-            className="text-zinc-600 dark:text-zinc-400 hover:underline"
-          >
-            設定（Slack 通知）
-          </a>
-          {/* Issue #32: 生成API利用状況をサブエリアで表示 */}
-          <OpenAIStatusInline />
-          <span className="ml-auto flex items-center gap-2 text-zinc-500 dark:text-zinc-400">
-            <span>サブ:</span>
-            <a
-              href="/api/db-health"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-zinc-600 dark:text-zinc-400 hover:underline"
-            >
-              DB 接続確認
-            </a>
-            <a
-              href="https://github.com/bokunon/norm-change-alerts/blob/main/docs/architecture.md"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-zinc-600 dark:text-zinc-400 hover:underline"
-            >
-              アーキテクチャ概要
-            </a>
-          </span>
-        </nav>
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-4">
           法令変更・インパクト一覧
         </h1>
         <div className="flex flex-wrap gap-4 mb-6">
+          {/* Issue #53: 施行状態で絞り込み */}
+          <fieldset className="flex flex-wrap items-center gap-2 text-sm">
+            <legend className="sr-only">施行状態で絞り込み</legend>
+            {(["not_yet", "enforced", "all"] as const).map((v) => (
+              <label key={v} className="flex items-center gap-1">
+                <input
+                  type="radio"
+                  name="enforcement"
+                  checked={enforcement === v}
+                  onChange={() => setEnforcement(v)}
+                  className="border-zinc-400"
+                />
+                {v === "not_yet" ? "未施行" : v === "enforced" ? "施行済" : "すべて"}
+              </label>
+            ))}
+          </fieldset>
           <label className="flex items-center gap-2 text-sm">
             公示日 From
             <input
@@ -210,6 +185,16 @@ export default function NormChangesPage() {
                       {stripObligationAndLevelFromSummary(item.summary) || (item.summary ?? "")}
                     </p>
                     <div className="flex flex-wrap gap-2 text-xs">
+                      {/* Issue #53: 施行済・未施行のバッジ */}
+                      <span
+                        className={
+                          isEnforced(item.normSource?.effectiveAt ?? null)
+                            ? "rounded bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 font-medium text-amber-800 dark:text-amber-200"
+                            : "rounded bg-emerald-100 dark:bg-emerald-900/40 px-1.5 py-0.5 font-medium text-emerald-800 dark:text-emerald-200"
+                        }
+                      >
+                        {isEnforced(item.normSource?.effectiveAt ?? null) ? "施行済" : "未施行"}
+                      </span>
                       <span className="text-zinc-400">
                         リスク:{" "}
                         {(() => {
@@ -257,6 +242,15 @@ export default function NormChangesPage() {
             )}
           </>
         )}
+        {/* Issue #55: サブリンクを右下に配置 */}
+        <div className="mt-12 flex justify-end">
+          <a
+            href="/about"
+            className="text-sm text-zinc-500 dark:text-zinc-400 hover:underline"
+          >
+            設定・DB・アーキテクチャ等
+          </a>
+        </div>
       </div>
     </div>
   );

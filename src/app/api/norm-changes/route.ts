@@ -1,7 +1,8 @@
 /**
- * NormChange 一覧取得（フィルタ: 公示日・施行日・種別・タグ・リスク3軸）
+ * NormChange 一覧取得（フィルタ: 公示日・施行日・種別・タグ・リスク・施行状態）
  * Issue #31: デフォルト limit=20、cursor で次ページ取得。
- * GET /api/norm-changes?from=...&to=...&limit=20&cursor=lastId
+ * Issue #53: enforcement パラメータ（not_yet / enforced）で施行済・未施行を絞り込み。
+ * GET /api/norm-changes?from=...&to=...&enforcement=not_yet&limit=20&cursor=lastId
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -10,6 +11,12 @@ const RISK_VALUES = ["survival", "financial", "credit", "other"] as const;
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
 
+/** 今日 0:00 UTC */
+function startOfTodayUtc(): Date {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const from = searchParams.get("from");
@@ -17,13 +24,20 @@ export async function GET(request: Request) {
   const type = searchParams.get("type");
   const tagId = searchParams.get("tagId");
   const riskParam = searchParams.get("risk");
+  const enforcement = searchParams.get("enforcement"); // not_yet | enforced
   const limit = Math.min(
     Number(searchParams.get("limit")) || DEFAULT_LIMIT,
     MAX_LIMIT
   );
   const cursor = searchParams.get("cursor") ?? undefined;
 
-  const normSourceWhere: { publishedAt?: { gte?: Date; lte?: Date }; type?: string } = {};
+  const todayStart = startOfTodayUtc();
+  const normSourceWhere: {
+    publishedAt?: { gte?: Date; lte?: Date };
+    type?: string;
+    OR?: Array<{ effectiveAt: null } | { effectiveAt: { gt: Date } }>;
+    effectiveAt?: { not: null; lte: Date };
+  } = {};
   if (from) {
     const d = parseYyyyMMdd(from);
     if (d) normSourceWhere.publishedAt = { ...normSourceWhere.publishedAt, gte: d };
@@ -33,6 +47,12 @@ export async function GET(request: Request) {
     if (d) normSourceWhere.publishedAt = { ...normSourceWhere.publishedAt, lte: d };
   }
   if (type) normSourceWhere.type = type;
+  // Issue #53: 施行状態で絞り込み（effectiveAt で判定）
+  if (enforcement === "not_yet") {
+    normSourceWhere.OR = [{ effectiveAt: null }, { effectiveAt: { gt: todayStart } }];
+  } else if (enforcement === "enforced") {
+    normSourceWhere.effectiveAt = { not: null, lte: todayStart };
+  }
 
   const riskFilters = riskParam
     ? riskParam.split(",").filter((r) => RISK_VALUES.includes(r as (typeof RISK_VALUES)[number]))
