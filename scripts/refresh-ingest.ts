@@ -9,11 +9,25 @@
  *   npx tsx scripts/refresh-ingest.ts 20250201  (from のみ → その日のみ)
  *
  * 前提: .env に DATABASE_URL が設定されていること
+ *
+ * Issue #56: statement timeout 対策として、リトライ・接続リフレッシュ・statement_timeout 延長を実施
  */
 import "dotenv/config";
+import { prisma } from "../src/lib/prisma";
 import { runIngestForDate } from "../src/lib/ingest-laws";
 import { setLastSuccessfulIngestDate } from "../src/lib/ingest-state";
 import { runAnalyzeForPendingSources, isAnalyzeAborted } from "../src/lib/run-analyze";
+
+/** Issue #56: 長時間クエリ用に statement_timeout を延長（10分） */
+async function setStatementTimeoutLong(): Promise<void> {
+  await prisma.$executeRawUnsafe("SET statement_timeout = '600s'");
+}
+
+/** Issue #56: 接続をリフレッシュしてプールから新しい接続を取得 */
+async function refreshConnection(): Promise<void> {
+  await prisma.$disconnect();
+  await setStatementTimeoutLong();
+}
 
 /** yyyyMMdd の日付リストを生成（from ≦ to） */
 function dateRange(from: string, to: string): string[] {
@@ -94,14 +108,40 @@ async function main() {
   /** Issue #50: ingest と analyze の両方が成功した日のみ記録。analyze 失敗時は次回その日から再開 */
   let lastCompletedDate: string | null = null;
 
+  // Issue #56: statement_timeout を 10 分に延長
+  await setStatementTimeoutLong();
+
+  const MAX_RETRIES = 2; // Issue #56: 同一日付で最大 2 回リトライ（計 3 回実行）
+
   try {
     for (let i = 0; i < dates.length; i++) {
       const date = dates[i];
+
+      // Issue #56: 10 日ごとに接続をリフレッシュ
+      if (i > 0 && i % 10 === 0) {
+        await refreshConnection();
+      }
+
       process.stdout.write(`[${i + 1}/${dates.length}] ${date} ... `);
-      const result = await runIngestForDate(date, { delayAfterPrevMs });
-      if (!result.ok) {
+
+      let result: Awaited<ReturnType<typeof runIngestForDate>> | undefined;
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          result = await runIngestForDate(date, { delayAfterPrevMs });
+          break;
+        } catch (e) {
+          if (attempt < MAX_RETRIES) {
+            process.stdout.write(`(リトライ ${attempt + 1}/${MAX_RETRIES}) `);
+            await prisma.$disconnect();
+            await setStatementTimeoutLong();
+          } else {
+            result = { ok: false, error: e instanceof Error ? e.message : String(e) };
+          }
+        }
+      }
+      if (!result || !result.ok) {
         failed += 1;
-        console.log("失敗: %s", result.error);
+        console.log("失敗: %s", result?.ok === false ? result.error : "不明なエラー");
         continue;
       }
       totalCreated += result.created;
@@ -145,6 +185,7 @@ async function main() {
     console.log("\n完了: %d 日処理, 法令 %d 件 (新規 %d / 更新 %d), 失敗 %d 日, 所要時間 %s 秒", dates.length, totalLaws, totalCreated, totalUpdated, failed, elapsed);
 
     // bulkdownloadDate が null の既存データ等、残りの未解析を解析
+    await refreshConnection(); // Issue #56: 長時間実行後の接続をリフレッシュ
     console.log("\n未解析の NormSource（bulkdownloadDate 未設定等）を解析しています...");
     const analyzeResult = await runAnalyzeForPendingSources({});
     if (isAnalyzeAborted(analyzeResult)) {
