@@ -305,13 +305,9 @@ export async function fetchBulkdownloadList(
     };
   }
 
-  // レスポンスが空 → 指定日にデータがないか未来日・不正な日付の可能性
+  // レスポンスが空 → その日に公示が無い（土日祝・更新法令なし等）。0 件として成功扱い
   if (buffer.length === 0) {
-    return {
-      ok: false,
-      error:
-        "レスポンスが空です。指定した日付にデータがないか、未来日・不正な日付の可能性があります。過去の実在する日付（例: 20230201）で試してください。",
-    };
+    return { ok: true, rows: [], date: yyyyMMdd };
   }
 
   // サーバーが Content-Encoding: gzip で返す場合、fetch が解凍しない環境では gzip のまま届く

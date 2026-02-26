@@ -278,7 +278,7 @@ describe("fetchBulkdownloadList（取得試験・fetch モック）", () => {
     if (!result.ok) expect(result.error).toContain("404");
   });
 
-  it("fetch が空 body のときはエラー", async () => {
+  it("fetch が空 body のときは 0 件成功扱い（その日に公示が無い日）", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -288,8 +288,11 @@ describe("fetchBulkdownloadList（取得試験・fetch モック）", () => {
       })
     );
     const result = await fetchBulkdownloadList(date);
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain("空");
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.rows).toEqual([]);
+      expect(result.date).toBe(date);
+    }
   });
 
   it("Shift_JIS (CP932) の CSV が ZIP に入っている場合も正しくデコードされて行が返る", async () => {
