@@ -1,16 +1,19 @@
 /**
  * Issue #14: 一日1回の e-Gov ingest 用エンドポイント
- * Vercel Cron からのみ呼ばれる想定。CRON_SECRET で認証する。
+ * Vercel Cron または GitHub Actions から呼ばれる想定。CRON_SECRET で認証する。
  * 実行時刻: 日本時間 7:00（vercel.json の schedule: "0 22 * * *" = UTC 22:00）
  *
  * - 取り込み範囲: 前回成功した日の翌日 〜 UTC の前日（コケた場合も次回は続きから再開）
+ * - maxDays: クエリパラメータ。1回の実行で処理する最大日数（未指定時は全期間）。大量の backlog 時にタイムアウトを防ぐ
  * - Issue #50: 各日ごとに ingest → analyze → setLastSuccess。lastSuccess は「ingest と analyze の両方完了」を意味
  * - ingest 成功後に analyze が失敗した場合、次回は analyze から再開（ingest はスキップ）
  * - Issue #52: 実行開始・終了を CronExecutionLog に記録
+ * - Issue #63: refresh-ingest と同様の statement_timeout 延長・リトライ・接続リフレッシュ・delayAfterPrevMs を適用
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { runIngestForDate } from "@/lib/ingest-laws";
+import { setStatementTimeoutLong, refreshConnection } from "@/lib/db-timeout";
 import {
   getLastSuccessfulIngestDate,
   setLastSuccessfulIngestDate,
@@ -104,7 +107,28 @@ export async function GET(request: Request) {
   try {
     const lastSuccess = await getLastSuccessfulIngestDate();
     const startDate = lastSuccess ? nextDayYyyyMMdd(lastSuccess) : endDate;
-    const dates = dateRangeInclusive(startDate, endDate);
+    let dates = dateRangeInclusive(startDate, endDate);
+
+    // maxDays: 1回の実行で処理する最大日数（1日≒15分のため、大量 backlog 時は1日に制限）
+    const maxDaysParam = new URL(request.url).searchParams.get("maxDays");
+    const maxDays =
+      maxDaysParam !== null
+        ? Math.min(3, Math.max(1, parseInt(maxDaysParam, 10) || 1))
+        : dates.length > 1
+          ? 1
+          : undefined; // 2日超の backlog 時はデフォルトで1日に制限（タイムアウト防止）
+    if (maxDays !== undefined && dates.length > maxDays) {
+      dates = dates.slice(0, maxDays);
+    }
+
+    // Issue #63: statement_timeout を 10 分に延長
+    await setStatementTimeoutLong();
+
+    // Issue #63: e-Gov 負荷軽減のため 100ms 待機（Vercel タイムアウトを考慮して refresh-ingest より短め）
+    const delayAfterPrevMs = 100;
+
+    // Issue #63: 同一日付で最大 2 回リトライ（計 3 回実行）
+    const MAX_RETRIES = 2;
 
     if (dates.length === 0) {
       // 取り込む日はなくても、bulkdownloadDate が null の既存データ等で未解析が残っている可能性があるので analyze を実行
@@ -141,11 +165,31 @@ export async function GET(request: Request) {
     let failedDate: string | null = null;
     let failedError: string | null = null;
 
-    for (const yyyyMMdd of dates) {
-      const result = await runIngestForDate(yyyyMMdd);
-      if (!result.ok) {
+    for (let i = 0; i < dates.length; i++) {
+      const yyyyMMdd = dates[i];
+
+      // Issue #63: 複数日処理時に 2 日目で接続をリフレッシュ
+      if (i === 1 && dates.length >= 2) {
+        await refreshConnection();
+      }
+
+      let result: Awaited<ReturnType<typeof runIngestForDate>> | undefined;
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          result = await runIngestForDate(yyyyMMdd, { delayAfterPrevMs });
+          break;
+        } catch (e) {
+          if (attempt < MAX_RETRIES) {
+            await prisma.$disconnect();
+            await setStatementTimeoutLong();
+          } else {
+            result = { ok: false, error: e instanceof Error ? e.message : String(e) };
+          }
+        }
+      }
+      if (!result || !result.ok) {
         failedDate = yyyyMMdd;
-        failedError = result.error;
+        failedError = result?.ok === false ? result.error : "不明なエラー";
         break;
       }
       processed.push({

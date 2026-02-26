@@ -17,17 +17,7 @@ import { prisma } from "../src/lib/prisma";
 import { runIngestForDate } from "../src/lib/ingest-laws";
 import { setLastSuccessfulIngestDate } from "../src/lib/ingest-state";
 import { runAnalyzeForPendingSources, isAnalyzeAborted } from "../src/lib/run-analyze";
-
-/** Issue #56: 長時間クエリ用に statement_timeout を延長（10分） */
-async function setStatementTimeoutLong(): Promise<void> {
-  await prisma.$executeRawUnsafe("SET statement_timeout = '600s'");
-}
-
-/** Issue #56: 接続をリフレッシュしてプールから新しい接続を取得 */
-async function refreshConnection(): Promise<void> {
-  await prisma.$disconnect();
-  await setStatementTimeoutLong();
-}
+import { setStatementTimeoutLong, refreshConnection } from "../src/lib/db-timeout";
 
 /** yyyyMMdd の日付リストを生成（from ≦ to） */
 function dateRange(from: string, to: string): string[] {
