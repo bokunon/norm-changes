@@ -6,8 +6,6 @@ import { prisma } from "@/lib/prisma";
 import {
   detectPenaltyRisk,
   detectObligationLevel,
-  detectRiskTypes,
-  normalizeRiskToSingle,
   buildSummary,
 } from "@/lib/analyze";
 import { notifySlack } from "@/lib/slack";
@@ -144,8 +142,13 @@ export async function runAnalyzeForPendingSources(
       let summary = buildSummary(src.title, src.rawText);
       let obligationLevel = detectObligationLevel(text);
       let penaltyRisk = detectPenaltyRisk(text);
-      // リスクは一種類のみの原理原則で正規化（キーワード検知で複数 true になり得るため）
-      let riskTypes = normalizeRiskToSingle(detectRiskTypes(text));
+      // Issue #65: リスクの種類は AI の primaryRiskType のみで決定（キーワード検知は廃止）
+      let riskTypes = {
+        survival: false,
+        financial: false,
+        credit: false,
+        other: true,
+      };
 
       let reportSummary: string | null = null;
       let reportActionItems: { text: string; source?: "amendment" | "existing" }[] | null = null;
@@ -195,6 +198,7 @@ export async function runAnalyzeForPendingSources(
           other: p === "other",
         };
       }
+      // primaryRiskType が無い場合は上記の other: true のまま
 
       const change = await prisma.normChange.create({
         data: {
