@@ -1,8 +1,9 @@
 /**
- * Issue #67: リスク判定の洗替スクリプト（ローカル用）
+ * Issue #67, #69, #71: リスク判定の洗替スクリプト（ローカル用）
  *
- * プロンプト修正・validateRiskTypeInText 廃止後のリスク判定で、
- * 既存 NormChange を再解析する。
+ * プロンプト修正・validateRiskTypeInText 廃止・キーワードフォールバック・
+ * リスク判定と根拠の同一プロセス化（#71）後のリスク判定で、既存 NormChange を再解析する。
+ * #68 の schema 変更（obligationLevel, penaltyRisk, reportSummary, deadline 削除）後も replace で正しく動作する。
  *
  * ローカル DB に対して実行。.env の DATABASE_URL, OPENAI_API_KEY を設定すること。
  *
@@ -137,7 +138,7 @@ async function main() {
     process.exit(0);
   }
 
-  console.log("Issue #67 洗替（ローカル）: %s の NormSource（未施行・解析済み）%d 件を再解析します。\n", criteria, toProcess.length);
+  console.log("Issue #67/#69/#71 洗替（ローカル）: %s の NormSource（未施行・解析済み）%d 件を再解析します。\n", criteria, toProcess.length);
   if (limit) console.log("--limit %d のため、先頭 %d 件のみ処理します。\n", limit, toProcess.length);
 
   let done = 0;

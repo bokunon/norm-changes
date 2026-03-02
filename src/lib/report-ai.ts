@@ -53,10 +53,11 @@ JSON の形式:
     { "action": "具体的な推奨アクションの文言", "basis": "根拠（条文・箇所など）", "source": "amendment" または "existing" },
     ...
   ],
-  "penaltyDetailText": "改正後に新たに発生した罰則・義務リスクについて、法律の前後から解釈した断定文（1文）。該当なしなら null",
-  "primaryRiskType": "survival" | "financial" | "credit" | "other"
+  "primaryRiskType": "survival" | "financial" | "credit" | "other",
+  "penaltyDetailText": "primaryRiskType の判定根拠（1文）。survival/financial/credit のときは必ず記載。other のときは null"
 }
 
+- **primaryRiskType と penaltyDetailText は同一の推論で一貫して返す**（Issue #71）。リスク判定とその根拠を同時に出力する。
 - primaryRiskType: **改正により新たに発生したリスクのみ**を評価する。必ず4つのいずれか1つだけを返す。
   - 改正前の条文に既にあった規定は含めない。
   - **改正前の全文が無い場合**（新規制定・前版取得不可等）は、改正後の全文に記載されている罰則・義務リスクを**すべて新規として評価する**。
@@ -72,7 +73,7 @@ JSON の形式:
   厳しさの順は survival > financial > credit > other。複数該当しうる場合は厳しい方1つだけ返す。
 - actionItems: 取るべきアクションの「ポイントのみ」を3〜10個。各要素は { "text": "文言", "source": "amendment" または "existing" }。source は「今回の改正で新たに必要になった」なら amendment、「元の法律からある対応」なら existing。必ず付与する。
 - detailedRecommendations: 「具体的な」推奨アクションと根拠。各要素に source を付与: "amendment"=改正により発生した内容, "existing"=元の法律にあった内容。
-- penaltyDetailText: 改正前にはなく改正後に発生している罰則・義務リスクに限定し、解釈を断定で1文で記載。該当しなければ null。**程度（HIGH/MID/LOW/NONE）や義務レベル（MUST/SHOULD/INFO）の表記は一切入れず、解釈の断定文のみを記載する。**`;
+- penaltyDetailText: **primaryRiskType が survival/financial/credit のときは必ず記載**。その判定の根拠（なぜそのリスクと判断したか、条文のどの規定に基づくか）を解釈の断定文で1文で記載。primaryRiskType が other のときは null。**程度（HIGH/MID/LOW/NONE）や義務レベル（MUST/SHOULD/INFO）の表記は一切入れず、解釈の断定文のみを記載する。**`;
 
 function buildUserPrompt(input: ReportInput): string {
   const parts: string[] = [
