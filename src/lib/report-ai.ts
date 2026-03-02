@@ -30,8 +30,6 @@ export interface ReportOutput {
     basis: string;
     source?: RecommendationSource;
   }[];
-  riskLevel?: "HIGH" | "MID" | "LOW" | "NONE";
-  obligationLevel?: "MUST" | "SHOULD" | "INFO";
   /** Issue #36: 改正後に発生した罰則・義務リスクについての解釈を断定で1文 */
   penaltyDetailText?: string | null;
   /**
@@ -55,24 +53,23 @@ JSON の形式:
     { "action": "具体的な推奨アクションの文言", "basis": "根拠（条文・箇所など）", "source": "amendment" または "existing" },
     ...
   ],
-  "riskLevel": "HIGH" | "MID" | "LOW" | "NONE",
-  "obligationLevel": "MUST" | "SHOULD" | "INFO",
   "penaltyDetailText": "改正後に新たに発生した罰則・義務リスクについて、法律の前後から解釈した断定文（1文）。該当なしなら null",
   "primaryRiskType": "survival" | "financial" | "credit" | "other"
 }
 
-- riskLevel: 罰則・業務停止・登録取消等のリスクが高いほど HIGH。特になければ NONE。
 - primaryRiskType: **改正により新たに発生したリスクのみ**を評価する。必ず4つのいずれか1つだけを返す。
-  - 改正前の条文に既にあった規定は含めない。改正前の全文が無い場合（新規法案等）は、改正後の全文を評価する。
+  - 改正前の条文に既にあった規定は含めない。
+  - **改正前の全文が無い場合**（新規制定・前版取得不可等）は、改正後の全文に記載されている罰則・義務リスクを**すべて新規として評価する**。
   - 次のいずれかに該当する場合に、該当するリスクを選ぶ:
     (1) 改正で新たに追加された規定（登録取消し、業務停止、罰金等）
     (2) 既存規定の適用条件が変わって実質的にリスクが生じた場合（例: 届出が任意→必須になり、既存の罰則が実効化）
-  - survival: 上記(1)(2)で業務停止・免許取消・登録取消等（事業が続けられなくなる可能性）が該当する場合。
-  - financial: 上記(1)(2)で罰金・課徴金・過料・納付金・科料等の金銭的負担が該当する場合。
-  - credit: 上記(1)(2)で社名公表・勧告・警告等（信用・評判に関わる措置）が該当する場合。
+    (3) 罰則の強化（罰金額の引き上げ、適用範囲の拡大等）
+    (4) 規定の明確化（曖昧だった規定が具体化され、実効性が高まった場合）
+  - survival: 上記(1)(2)(3)(4)で業務停止・免許取消・登録取消等（事業が続けられなくなる可能性）が該当する場合。
+  - financial: 上記(1)(2)(3)(4)で罰金・課徴金・過料・納付金・科料等の金銭的負担が該当する場合。
+  - credit: 上記(1)(2)(3)(4)で社名公表・勧告・警告等（信用・評判に関わる措置）が該当する場合。
   - other: 手続きの方法変更・届出様式変更・記載の整理等、上記3つに当てはまらないが対応が必要な改正。文言の微修正のみの場合も other。
   厳しさの順は survival > financial > credit > other。複数該当しうる場合は厳しい方1つだけ返す。
-- obligationLevel: 義務規定（しなければならない等）が強ければ MUST。推奨程度なら SHOULD。参考情報なら INFO。
 - actionItems: 取るべきアクションの「ポイントのみ」を3〜10個。各要素は { "text": "文言", "source": "amendment" または "existing" }。source は「今回の改正で新たに必要になった」なら amendment、「元の法律からある対応」なら existing。必ず付与する。
 - detailedRecommendations: 「具体的な」推奨アクションと根拠。各要素に source を付与: "amendment"=改正により発生した内容, "existing"=元の法律にあった内容。
 - penaltyDetailText: 改正前にはなく改正後に発生している罰則・義務リスクに限定し、解釈を断定で1文で記載。該当しなければ null。**程度（HIGH/MID/LOW/NONE）や義務レベル（MUST/SHOULD/INFO）の表記は一切入れず、解釈の断定文のみを記載する。**`;
@@ -102,72 +99,6 @@ function buildUserPrompt(input: ReportInput): string {
 
 /** レポート生成・リスク検証に使用。5 系の方が指示遵守が良い。nano はより安価・低レイテンシ用 */
 const MODEL = "gpt-5-mini";
-
-type RiskTypeToValidate = "survival" | "financial" | "credit";
-
-const RISK_VALIDATION_SPEC: Record<
-  RiskTypeToValidate,
-  { key: string; question: string }
-> = {
-  survival: {
-    key: "hasMatch",
-    question: `以下の改正条文の内容に、**業務停止・免許取消・登録取消・許可取消・営業停止**等（事業が続けられなくなる可能性がある措置）が、条文上に明示的に規定されているか判定してください。
-該当する文言が条文に存在する場合のみ true、それ以外は false。`,
-  },
-  financial: {
-    key: "hasMatch",
-    question: `以下の改正条文の内容に、**罰金・課徴金・過料・納付金・科料**のいずれかが、条文上に明示的に規定されているか判定してください。
-該当する文言が条文に存在する場合のみ true、手続き規定・届出義務等のみで金銭罰の規定が無い場合は false。`,
-  },
-  credit: {
-    key: "hasMatch",
-    question: `以下の改正条文の内容に、**社名公表・氏名公表・勧告・警告・指名**等（信用・評判に関わる措置）が、条文上に明示的に規定されているか判定してください。
-該当する文言が条文に存在する場合のみ true、それ以外は false。`,
-  },
-};
-
-/**
- * 条文に指定リスク種別に該当する規定が明示されているかを検証する。
- * survival / financial / credit のいずれかが選ばれたとき、矛盾があれば other に上書きするために使う。
- */
-async function validateRiskTypeInText(
-  openai: OpenAI,
-  rawText: string | null,
-  riskType: RiskTypeToValidate
-): Promise<boolean> {
-  const text = (rawText ?? "").trim().slice(0, 4000);
-  if (!text) return false;
-  const spec = RISK_VALIDATION_SPEC[riskType];
-  try {
-    const res = await openai.chat.completions.create({
-      model: MODEL,
-      messages: [
-        {
-          role: "system",
-          content:
-            "あなたは法令の条文を読む専門家です。質問に JSON のみで答えてください。",
-        },
-        {
-          role: "user",
-          content: `${spec.question}
-
-【条文】
-${text}
-
-答える形式: {"${spec.key}": true または false} のみ。`,
-        },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0,
-    });
-    const raw = res.choices[0]?.message?.content;
-    if (!raw) return false;
-    const parsed = JSON.parse(raw) as Record<string, boolean>;
-    return parsed[spec.key] === true;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * OpenAI でレポートを生成する。API Key 未設定やエラー時は null を返す。
@@ -247,21 +178,7 @@ export async function generateReport(input: ReportInput): Promise<ReportOutput |
       ? (parsed.primaryRiskType as "survival" | "financial" | "credit" | "other")
       : undefined;
 
-    // survival / financial / credit のいずれかなら、条文に該当規定が明示されているか検証。無ければ other に上書き
-    if (
-      primaryRiskType === "survival" ||
-      primaryRiskType === "financial" ||
-      primaryRiskType === "credit"
-    ) {
-      const hasMatch = await validateRiskTypeInText(
-        openai,
-        input.rawText ?? "",
-        primaryRiskType
-      );
-      if (!hasMatch) {
-        primaryRiskType = "other";
-      }
-    }
+    // Issue #67: validateRiskTypeInText は廃止。偽陰性を招くため、AI の判定をそのまま採用する。
 
     // 対応重要度は表示しない方針のため、AI が含めていても除去してから返す
     const rawSummary = typeof parsed.summary === "string" ? parsed.summary : "";
@@ -270,14 +187,6 @@ export async function generateReport(input: ReportInput): Promise<ReportOutput |
       summary,
       actionItems,
       detailedRecommendations,
-      riskLevel:
-        parsed.riskLevel === "HIGH" || parsed.riskLevel === "MID" || parsed.riskLevel === "LOW" || parsed.riskLevel === "NONE"
-          ? parsed.riskLevel
-          : undefined,
-      obligationLevel:
-        parsed.obligationLevel === "MUST" || parsed.obligationLevel === "SHOULD" || parsed.obligationLevel === "INFO"
-          ? parsed.obligationLevel
-          : undefined,
       penaltyDetailText: penaltyDetailText ?? undefined,
       primaryRiskType,
     };

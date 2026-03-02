@@ -8,8 +8,6 @@ import { getMostSevereRiskShort, stripObligationAndLevelFromSummary } from "@/li
 type NormChangeItem = {
   id: string;
   summary: string;
-  obligationLevel: string;
-  penaltyRisk: string;
   riskSurvival: boolean;
   riskFinancial: boolean;
   riskCredit: boolean;

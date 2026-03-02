@@ -114,8 +114,6 @@ export async function GET(request: Request) {
     items: list.map((i: Item) => ({
       id: i.id,
       summary: i.summary,
-      obligationLevel: i.obligationLevel,
-      penaltyRisk: i.penaltyRisk,
       riskSurvival: i.riskSurvival,
       riskFinancial: i.riskFinancial,
       riskCredit: i.riskCredit,

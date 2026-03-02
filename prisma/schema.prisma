@@ -35,9 +35,7 @@ model NormChange {
   id               String    @id @default(cuid())
   normSourceId     String
   summary          String    @db.Text
-  obligationLevel  String    // 義務の強さ: MUST/SHOULD/INFO（生存・金銭・信用とは別軸。詳細画面では未表示）
-  penaltyRisk      String    // HIGH, MID, LOW, NONE（後方互換）。表示時は程度表記は出さない
-  penaltyDetail    String?   @db.Text
+  penaltyDetail    String?   @db.Text // リスクの詳細（解釈断定文）。survival/financial/credit のいずれかが true のときのみ。other のみなら null
   // Issue #16/#19: リスク分類（生存・金銭・信用・その他）
   riskSurvival     Boolean   @default(false) // 業務停止・免許取消等
   riskFinancial    Boolean   @default(false) // 罰金・課徴金等
@@ -48,7 +46,6 @@ model NormChange {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   // Issue #12: AI 生成レポート（未設定時は null）
-  reportSummary               String?   @db.Text // サマリ（箇条書きの要約）
   reportActionItems           Json?     // 箇条書きアクション一覧 string[]
   reportDetailedRecommendations Json?   // 詳細推奨アクション＋根拠 { action: string, basis: string }[]
 

@@ -86,7 +86,7 @@ export function stripRiskLevelFromPenaltyDetail(text: string | null | undefined)
 
 /**
  * 概要・サマリ表示用: 「対応重要度 SHOULD」や「MID-」「HIGH-」などを除去する。
- * 一覧・詳細で summary / reportSummary を表示する前に使う。
+ * 一覧・詳細で summary を表示する前に使う。
  */
 export function stripObligationAndLevelFromSummary(text: string | null | undefined): string {
   if (!text || typeof text !== "string") return "";

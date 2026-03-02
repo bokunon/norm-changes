@@ -3,13 +3,10 @@
  * POST /api/analyze および ingest cron の「取り込み後に解析」で使用
  */
 import { prisma } from "@/lib/prisma";
-import {
-  detectPenaltyRisk,
-  detectObligationLevel,
-  buildSummary,
-} from "@/lib/analyze";
+import { buildSummary } from "@/lib/analyze";
 import { notifySlack } from "@/lib/slack";
 import { generateReport } from "@/lib/report-ai";
+import { detectRiskByKeywords } from "@/lib/risk-keyword-fallback";
 import { matchesNotificationFilter } from "@/lib/notification-filter-match";
 import { stripObligationAndLevelFromSummary } from "@/lib/risk-display";
 
@@ -138,10 +135,7 @@ export async function runAnalyzeForPendingSources(
 
   try {
     for (const src of sources) {
-      const text = src.rawText ?? src.title;
       let summary = buildSummary(src.title, src.rawText);
-      let obligationLevel = detectObligationLevel(text);
-      let penaltyRisk = detectPenaltyRisk(text);
       // Issue #65: リスクの種類は AI の primaryRiskType のみで決定（キーワード検知は廃止）
       let riskTypes = {
         survival: false,
@@ -150,7 +144,6 @@ export async function runAnalyzeForPendingSources(
         other: true,
       };
 
-      let reportSummary: string | null = null;
       let reportActionItems: { text: string; source?: "amendment" | "existing" }[] | null = null;
       let reportDetailedRecommendations: {
         action: string;
@@ -172,7 +165,6 @@ export async function runAnalyzeForPendingSources(
         return { ok: false, aborted: true, reason: "AI_REPORT_UNAVAILABLE" };
       }
 
-      reportSummary = report.summary;
       reportActionItems =
         report.actionItems.length > 0
           ? report.actionItems.map((a) => ({ text: a.text, source: a.source }))
@@ -187,10 +179,13 @@ export async function runAnalyzeForPendingSources(
           : null;
       // 対応重要度は表示しない方針のため、AI が含めていても保存前に除去
       if (report.summary) summary = stripObligationAndLevelFromSummary(report.summary) || report.summary;
-      if (report.obligationLevel) obligationLevel = report.obligationLevel;
-      if (report.riskLevel) penaltyRisk = report.riskLevel;
       if (report.primaryRiskType) {
-        const p = report.primaryRiskType;
+        let p = report.primaryRiskType;
+        // Issue #67: AI が other を返したとき、キーワードでフォールバック
+        if (p === "other") {
+          const keywordDetected = detectRiskByKeywords(src.rawText);
+          if (keywordDetected) p = keywordDetected;
+        }
         riskTypes = {
           survival: p === "survival",
           financial: p === "financial",
@@ -200,22 +195,23 @@ export async function runAnalyzeForPendingSources(
       }
       // primaryRiskType が無い場合は上記の other: true のまま
 
+      // penaltyDetail: survival/financial/credit のいずれかが true のときのみ penaltyDetailText。すべて other なら null
+      const hasSevereRisk = riskTypes.survival || riskTypes.financial || riskTypes.credit;
+      const penaltyDetail = hasSevereRisk
+        ? (report.penaltyDetailText?.trim() || null)
+        : null;
+
       const change = await prisma.normChange.create({
         data: {
           normSourceId: src.id,
           summary,
-          obligationLevel,
-          penaltyRisk,
-          penaltyDetail:
-            report.penaltyDetailText ??
-            (penaltyRisk !== "NONE" ? "罰則・義務規定の可能性（要確認）" : null),
+          penaltyDetail,
           riskSurvival: riskTypes.survival,
           riskFinancial: riskTypes.financial,
           riskCredit: riskTypes.credit,
           riskOther: riskTypes.other,
           effectiveFrom: src.effectiveAt ?? null,
           deadline: null,
-          reportSummary: reportSummary ?? undefined,
           reportActionItems: reportActionItems ?? undefined,
           reportDetailedRecommendations: reportDetailedRecommendations ?? undefined,
         },

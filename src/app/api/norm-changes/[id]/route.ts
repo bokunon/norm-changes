@@ -27,8 +27,6 @@ export async function GET(
     item: {
       id: change.id,
       summary: change.summary,
-      obligationLevel: change.obligationLevel,
-      penaltyRisk: change.penaltyRisk,
       riskSurvival: change.riskSurvival,
       riskFinancial: change.riskFinancial,
       riskCredit: change.riskCredit,
@@ -38,7 +36,6 @@ export async function GET(
       deadline: change.deadline?.toISOString() ?? null,
       createdAt: change.createdAt.toISOString(),
       updatedAt: change.updatedAt.toISOString(),
-      reportSummary: change.reportSummary ?? null,
       reportActionItems: change.reportActionItems as string[] | { text: string; source?: "amendment" | "existing" }[] | null,
       reportDetailedRecommendations: change.reportDetailedRecommendations as { action: string; basis: string; source?: "amendment" | "existing" }[] | null,
       normSource: change.normSource

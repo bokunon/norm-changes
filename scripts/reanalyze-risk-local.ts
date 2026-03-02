@@ -1,23 +1,23 @@
 /**
- * Issue #65: リスク判定仕様変更に伴う洗替スクリプト
+ * Issue #67: リスク判定の洗替スクリプト（ローカル用）
  *
- * キーワード検知廃止・primaryRiskType を「改正により新たに発生したリスク」に限定した
- * 仕様変更後、既存 NormChange を再解析するためのスクリプト。
+ * プロンプト修正・validateRiskTypeInText 廃止後のリスク判定で、
+ * 既存 NormChange を再解析する。
  *
- * 実行タイミング（ingest との兼ね合い等）は別チケットで検討。
+ * ローカル DB に対して実行。.env の DATABASE_URL, OPENAI_API_KEY を設定すること。
  *
  * 使い方:
- *   # bulkdownload 日付で指定（ingest の日付と連動）
- *   npx tsx scripts/reanalyze-risk-types.ts --bulkdownload 20250625
+ *   # 全件（未施行のみ）
+ *   npx tsx scripts/reanalyze-risk-local.ts
  *
- *   # 公示日で指定（reanalyze-from-date.ts と同様）
- *   npx tsx scripts/reanalyze-risk-types.ts --from-date 20240101
+ *   # 公示日で絞り込み
+ *   npx tsx scripts/reanalyze-risk-local.ts --from-date 20240101
  *
- *   # 続きから再開（プログレスファイルを読み、前回の続きから実行）
- *   npx tsx scripts/reanalyze-risk-types.ts --from-date 20240101 --resume
+ *   # 先頭 5 件だけ試す（ローカル検証用）
+ *   npx tsx scripts/reanalyze-risk-local.ts --limit 5
  *
- *   # 先頭 N 件スキップ（手動指定）
- *   npx tsx scripts/reanalyze-risk-types.ts --from-date 20240101 --skip 100
+ *   # 続きから再開
+ *   npx tsx scripts/reanalyze-risk-local.ts --from-date 20240101 --resume
  */
 import path from "path";
 import { fileURLToPath } from "url";
@@ -27,28 +27,28 @@ import dotenv from "dotenv";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
 
-const PROGRESS_FILE = path.resolve(__dirname, "reanalyze-risk-types.progress.json");
+const PROGRESS_FILE = path.resolve(__dirname, "reanalyze-risk-local.progress.json");
 
 type Progress = { criteria: string; processed: number; total: number; lastUpdated: string };
 
 function parseArgs(): {
-  bulkdownloadDate?: string;
   fromDate?: string;
+  limit?: number;
   skip: number;
   resume: boolean;
 } {
   const args = process.argv.slice(2);
-  let bulkdownloadDate: string | undefined;
   let fromDate: string | undefined;
+  let limit: number | undefined;
   let skip = 0;
   let resume = false;
 
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--bulkdownload" && args[i + 1]) {
-      bulkdownloadDate = args[i + 1];
-      i++;
-    } else if (args[i] === "--from-date" && args[i + 1]) {
+    if (args[i] === "--from-date" && args[i + 1]) {
       fromDate = args[i + 1];
+      i++;
+    } else if (args[i] === "--limit" && args[i + 1]) {
+      limit = Math.max(1, parseInt(args[i + 1], 10)) || undefined;
       i++;
     } else if (args[i] === "--skip" && args[i + 1]) {
       skip = Math.max(0, parseInt(args[i + 1], 10)) || 0;
@@ -58,7 +58,7 @@ function parseArgs(): {
     }
   }
 
-  return { bulkdownloadDate, fromDate, skip, resume };
+  return { fromDate, limit, skip, resume };
 }
 
 function readProgress(): Progress | null {
@@ -83,29 +83,16 @@ function clearProgress(): void {
 }
 
 async function main() {
-  const { bulkdownloadDate, fromDate, skip: skipArg, resume } = parseArgs();
+  const { fromDate, limit, skip: skipArg, resume } = parseArgs();
 
-  if (!bulkdownloadDate && !fromDate) {
-    console.error(`使い方:
-  npx tsx scripts/reanalyze-risk-types.ts --bulkdownload yyyyMMdd
-  npx tsx scripts/reanalyze-risk-types.ts --from-date yyyyMMdd
-  npx tsx scripts/reanalyze-risk-types.ts --from-date yyyyMMdd --resume
-  npx tsx scripts/reanalyze-risk-types.ts --from-date yyyyMMdd --skip N`);
-    process.exit(1);
-  }
-
-  if (bulkdownloadDate && !/^\d{8}$/.test(bulkdownloadDate)) {
-    console.error("--bulkdownload は yyyyMMdd 形式で指定してください");
-    process.exit(1);
-  }
-  if (fromDate && !/^\d{8}$/.test(fromDate)) {
+  // 未指定時は 2020年以降を対象（実質的に全件に近い）
+  const fromDateStr = fromDate ?? "20200101";
+  if (!/^\d{8}$/.test(fromDateStr)) {
     console.error("--from-date は yyyyMMdd 形式で指定してください");
     process.exit(1);
   }
 
-  const criteria = bulkdownloadDate
-    ? `bulkdownloadDate=${bulkdownloadDate}`
-    : `publishedAt >= ${fromDate}`;
+  const criteria = `publishedAt >= ${fromDateStr}`;
 
   let skip = skipArg;
   if (resume && skip === 0) {
@@ -122,28 +109,20 @@ async function main() {
   const todayStart = new Date();
   todayStart.setUTCHours(0, 0, 0, 0);
 
-  type Where = {
-    bulkdownloadDate?: string;
-    publishedAt?: { gte: Date };
-    OR?: Array<{ effectiveAt: null } | { effectiveAt: { gte: Date } }>;
-  };
-  const where: Where = {
-    // 未施行に絞る: 施行日未定 or 施行日が今日以降（run-analyze.ts と同様）
-    OR: [{ effectiveAt: null }, { effectiveAt: { gte: todayStart } }],
-  };
-  if (bulkdownloadDate) where.bulkdownloadDate = bulkdownloadDate;
-  if (fromDate) {
-    where.publishedAt = {
-      gte: new Date(
-        `${fromDate.slice(0, 4)}-${fromDate.slice(4, 6)}-${fromDate.slice(6, 8)}T00:00:00Z`
-      ),
-    };
-  }
-
   const sources = await prisma.normSource.findMany({
-    where,
+    where: {
+      publishedAt: {
+        gte: new Date(
+          `${fromDateStr.slice(0, 4)}-${fromDateStr.slice(4, 6)}-${fromDateStr.slice(6, 8)}T00:00:00Z`
+        ),
+      },
+      // 未施行: 施行日未定 or 施行日が今日以降
+      OR: [{ effectiveAt: null }, { effectiveAt: { gte: todayStart } }],
+      // 既に NormChange があるもの（洗替対象）
+      changes: { some: {} },
+    },
     orderBy: { publishedAt: "asc" },
-    select: { id: true, title: true, publishedAt: true, bulkdownloadDate: true },
+    select: { id: true, title: true, publishedAt: true },
   });
 
   if (sources.length === 0) {
@@ -151,14 +130,15 @@ async function main() {
     process.exit(0);
   }
 
-  const toProcess = skip > 0 ? sources.slice(skip) : sources;
+  const toProcess = limit ? sources.slice(skip, skip + limit) : skip > 0 ? sources.slice(skip) : sources;
   if (toProcess.length === 0) {
-    console.log("スキップ後に対象は 0 件です（skip=%d, 総数=%d）。", skip, sources.length);
+    console.log("スキップ後に対象は 0 件です（skip=%d, limit=%s, 総数=%d）。", skip, limit ?? "なし", sources.length);
     clearProgress();
     process.exit(0);
   }
 
-  console.log("Issue #65 洗替: %s の NormSource（未施行のみ）%d 件を再解析します。\n", criteria, toProcess.length);
+  console.log("Issue #67 洗替（ローカル）: %s の NormSource（未施行・解析済み）%d 件を再解析します。\n", criteria, toProcess.length);
+  if (limit) console.log("--limit %d のため、先頭 %d 件のみ処理します。\n", limit, toProcess.length);
 
   let done = 0;
   for (let i = 0; i < toProcess.length; i++) {
@@ -172,10 +152,7 @@ async function main() {
     if (isAnalyzeAborted(result)) {
       writeProgress({ criteria, processed: skip + i, total: sources.length, lastUpdated: "" });
       console.error("\n\nAI レポートを生成できません（API キー未設定または失敗）。打ち切り。");
-      const resumeCmd = bulkdownloadDate
-        ? `npx tsx scripts/reanalyze-risk-types.ts --bulkdownload ${bulkdownloadDate} --resume`
-        : `npx tsx scripts/reanalyze-risk-types.ts --from-date ${fromDate} --resume`;
-      console.error("続きから: %s", resumeCmd);
+      console.error("続きから: npx tsx scripts/reanalyze-risk-local.ts --from-date %s --resume", fromDateStr);
       process.exit(1);
     }
     if (!result.ok) {

@@ -13,8 +13,6 @@ import {
 type Detail = {
   id: string;
   summary: string;
-  obligationLevel: string;
-  penaltyRisk: string;
   riskSurvival: boolean;
   riskFinancial: boolean;
   riskCredit: boolean;
@@ -22,7 +20,6 @@ type Detail = {
   penaltyDetail: string | null;
   effectiveFrom: string | null;
   deadline: string | null;
-  reportSummary: string | null;
   /** 後方互換: string[] または { text, source? }[] */
   reportActionItems: string[] | { text: string; source?: "amendment" | "existing" }[] | null;
   reportDetailedRecommendations: {
@@ -78,7 +75,7 @@ export default function NormChangeDetailPage() {
 
   // AI レポート未生成ならこのプロダクトは意味をなさないため、転けて停止し次回を待つ
   const hasAiReport =
-    (item.reportSummary && item.reportSummary.trim() !== "") ||
+    (item.summary && item.summary.trim() !== "") ||
     (Array.isArray(item.reportActionItems) && item.reportActionItems.length > 0);
   if (!hasAiReport) {
     return (
@@ -139,43 +136,31 @@ export default function NormChangeDetailPage() {
               <dd className="flex flex-wrap items-baseline gap-2 mt-1">
                 {(() => {
                   const risk = getMostSevereRisk(item);
-                  const penaltyNone =
-                    item.penaltyRisk === "NONE" ||
-                    !item.penaltyDetail ||
-                    item.penaltyDetail.trim() === "" ||
-                    item.penaltyDetail === "なし";
-                  const showFinancialNote =
-                    risk?.key === "financial" && penaltyNone;
-                  return (
-                    <>
-                      {risk ? (
-                        <span className={risk.className}>{risk.label}</span>
-                      ) : (
-                        "—"
-                      )}
-                      {showFinancialNote && (
-                        <span className="text-xs text-amber-600 dark:text-amber-400">
-                          （条文上に罰則の明示がないため要確認）
-                        </span>
-                      )}
-                    </>
+                  return risk ? (
+                    <span className={risk.className}>{risk.label}</span>
+                  ) : (
+                    "—"
                   );
                 })()}
               </dd>
             </div>
-            {/* リスク詳細: リスクの種類の補足（解釈断定文）。MID-/SHOULD等のプレフィックスは表示しない */}
+            {/* リスク詳細: リスクの種類の補足（解釈断定文）。survival/financial/credit のときのみ。other のみなら「なし」 */}
             <div>
               <dt className="text-zinc-500">リスク詳細</dt>
               <dd
                 className={
-                  item.penaltyRisk === "HIGH"
+                  item.riskFinancial
                     ? "text-red-600 dark:text-red-400"
-                    : undefined
+                    : item.riskSurvival
+                      ? "text-amber-600 dark:text-amber-400"
+                      : item.riskCredit
+                        ? "text-sky-600 dark:text-sky-400"
+                        : undefined
                 }
               >
-                {item.penaltyRisk === "NONE"
-                  ? "なし"
-                  : stripRiskLevelFromPenaltyDetail(item.penaltyDetail) || "（要確認）"}
+                {item.penaltyDetail?.trim()
+                  ? stripRiskLevelFromPenaltyDetail(item.penaltyDetail)
+                  : "なし"}
               </dd>
             </div>
             {item.tags.length > 0 && (
@@ -200,9 +185,9 @@ export default function NormChangeDetailPage() {
               概要
             </h2>
             <div className="space-y-4">
-              {item.reportSummary && (
+              {item.summary && item.summary.trim() !== "" && (
                 <p className="whitespace-pre-wrap text-zinc-800 dark:text-zinc-200">
-                  {stripObligationAndLevelFromSummary(item.reportSummary) || item.reportSummary}
+                  {stripObligationAndLevelFromSummary(item.summary) || item.summary}
                 </p>
               )}
               {/* Issue #37: 上＝取るべきアクション（ポイントのみ）、下＝推奨アクション（具体的）。元法 vs 改正を明示 */}
