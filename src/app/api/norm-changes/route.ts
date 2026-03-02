@@ -120,7 +120,6 @@ export async function GET(request: Request) {
       riskOther: i.riskOther,
       penaltyDetail: i.penaltyDetail,
       effectiveFrom: i.effectiveFrom?.toISOString() ?? null,
-      deadline: i.deadline?.toISOString() ?? null,
       createdAt: i.createdAt.toISOString(),
       normSource: i.normSource
         ? {

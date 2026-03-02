@@ -83,7 +83,6 @@ erDiagram
         string penaltyRisk
         string penaltyDetail
         string effectiveFrom
-        string deadline
     }
 
     TAG {

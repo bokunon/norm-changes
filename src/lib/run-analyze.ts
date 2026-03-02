@@ -211,7 +211,6 @@ export async function runAnalyzeForPendingSources(
           riskCredit: riskTypes.credit,
           riskOther: riskTypes.other,
           effectiveFrom: src.effectiveAt ?? null,
-          deadline: null,
           reportActionItems: reportActionItems ?? undefined,
           reportDetailedRecommendations: reportDetailedRecommendations ?? undefined,
         },

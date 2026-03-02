@@ -33,7 +33,6 @@ export async function GET(
       riskOther: change.riskOther,
       penaltyDetail: change.penaltyDetail,
       effectiveFrom: change.effectiveFrom?.toISOString() ?? null,
-      deadline: change.deadline?.toISOString() ?? null,
       createdAt: change.createdAt.toISOString(),
       updatedAt: change.updatedAt.toISOString(),
       reportActionItems: change.reportActionItems as string[] | { text: string; source?: "amendment" | "existing" }[] | null,

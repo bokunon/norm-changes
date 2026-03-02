@@ -42,7 +42,6 @@ model NormChange {
   riskCredit       Boolean   @default(false) // 社名公表・勧告等
   riskOther        Boolean   @default(false) // 手続き変更等、上記に当てはまらないもの
   effectiveFrom    DateTime?
-  deadline         DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   // Issue #12: AI 生成レポート（未設定時は null）

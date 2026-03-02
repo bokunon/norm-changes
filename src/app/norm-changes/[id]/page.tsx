@@ -19,7 +19,6 @@ type Detail = {
   riskOther: boolean;
   penaltyDetail: string | null;
   effectiveFrom: string | null;
-  deadline: string | null;
   /** 後方互換: string[] または { text, source? }[] */
   reportActionItems: string[] | { text: string; source?: "amendment" | "existing" }[] | null;
   reportDetailedRecommendations: {
