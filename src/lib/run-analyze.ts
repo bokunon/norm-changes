@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { buildSummary } from "@/lib/analyze";
 import { notifySlack } from "@/lib/slack";
 import { generateReport } from "@/lib/report-ai";
-import { detectRiskByKeywords } from "@/lib/risk-keyword-fallback";
+import { detectRiskByKeywords, generatePenaltyDetailForFallback } from "@/lib/risk-keyword-fallback";
 import { matchesNotificationFilter } from "@/lib/notification-filter-match";
 import { stripObligationAndLevelFromSummary } from "@/lib/risk-display";
 
@@ -179,12 +179,20 @@ export async function runAnalyzeForPendingSources(
           : null;
       // 対応重要度は表示しない方針のため、AI が含めていても保存前に除去
       if (report.summary) summary = stripObligationAndLevelFromSummary(report.summary) || report.summary;
+      let fallbackPenaltyDetail: string | null = null;
       if (report.primaryRiskType) {
         let p = report.primaryRiskType;
         // Issue #67: AI が other を返したとき、キーワードでフォールバック
+        // Issue #72: penaltyDetail を生成できないときはフォールバックを却下
         if (p === "other") {
           const keywordDetected = detectRiskByKeywords(src.rawText);
-          if (keywordDetected) p = keywordDetected;
+          if (keywordDetected) {
+            const generated = generatePenaltyDetailForFallback(keywordDetected);
+            if (generated) {
+              p = keywordDetected;
+              fallbackPenaltyDetail = generated;
+            }
+          }
         }
         riskTypes = {
           survival: p === "survival",
@@ -195,10 +203,10 @@ export async function runAnalyzeForPendingSources(
       }
       // primaryRiskType が無い場合は上記の other: true のまま
 
-      // penaltyDetail: survival/financial/credit のいずれかが true のときのみ penaltyDetailText。すべて other なら null
+      // penaltyDetail: survival/financial/credit のいずれかが true のときのみ。AI の penaltyDetailText を優先、フォールバック時は生成したテンプレートを使用
       const hasSevereRisk = riskTypes.survival || riskTypes.financial || riskTypes.credit;
       const penaltyDetail = hasSevereRisk
-        ? (report.penaltyDetailText?.trim() || null)
+        ? (report.penaltyDetailText?.trim() || fallbackPenaltyDetail || null)
         : null;
 
       const change = await prisma.normChange.create({

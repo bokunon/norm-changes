@@ -39,3 +39,17 @@ export function detectRiskByKeywords(text: string | null | undefined): RiskType 
   if (CREDIT_KEYWORDS.some((k) => t.includes(k))) return "credit";
   return null;
 }
+
+/**
+ * Issue #72: キーワードフォールバック適用時の penaltyDetail をテンプレートで生成する。
+ * 生成できない場合は null（その場合はフォールバックを却下する）。
+ */
+export function generatePenaltyDetailForFallback(riskType: RiskType): string | null {
+  if (riskType === "other") return null;
+  const templates: Record<Exclude<RiskType, "other">, string> = {
+    survival: "条文に業務停止・免許取消・登録取消等の規定があり、事業継続リスクに該当する。",
+    financial: "条文に罰金・課徴金・過料・納付金・科料等の規定があり、金銭リスクに該当する。",
+    credit: "条文に社名公表・勧告・警告等の規定があり、信用リスクに該当する。",
+  };
+  return templates[riskType] ?? null;
+}
