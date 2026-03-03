@@ -40,6 +40,23 @@ export function detectRiskByKeywords(text: string | null | undefined): RiskType 
   return null;
 }
 
+/** Issue #73 試験用: 条文に含まれる全キーワードを検出（重複除去、厳しさ順） */
+export function findAllKeywordsInText(text: string | null | undefined): string[] {
+  const t = (text ?? "").trim();
+  if (!t) return [];
+  const found = new Set<string>();
+  for (const k of SURVIVAL_KEYWORDS) {
+    if (t.includes(k)) found.add(k);
+  }
+  for (const k of FINANCIAL_KEYWORDS) {
+    if (t.includes(k)) found.add(k);
+  }
+  for (const k of CREDIT_KEYWORDS) {
+    if (t.includes(k)) found.add(k);
+  }
+  return [...found];
+}
+
 /**
  * Issue #72: キーワードフォールバック適用時の penaltyDetail をテンプレートで生成する。
  * 生成できない場合は null（その場合はフォールバックを却下する）。

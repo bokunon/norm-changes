@@ -5,8 +5,12 @@
 import { prisma } from "@/lib/prisma";
 import { buildSummary } from "@/lib/analyze";
 import { notifySlack } from "@/lib/slack";
-import { generateReport } from "@/lib/report-ai";
-import { detectRiskByKeywords, generatePenaltyDetailForFallback } from "@/lib/risk-keyword-fallback";
+import { generateReport, generateReportWithKeywordHint } from "@/lib/report-ai";
+import {
+  detectRiskByKeywords,
+  findAllKeywordsInText,
+  generatePenaltyDetailForFallback,
+} from "@/lib/risk-keyword-fallback";
 import { matchesNotificationFilter } from "@/lib/notification-filter-match";
 import { stripObligationAndLevelFromSummary } from "@/lib/risk-display";
 
@@ -183,15 +187,38 @@ export async function runAnalyzeForPendingSources(
       if (report.primaryRiskType) {
         let p = report.primaryRiskType;
         // Issue #67: AI が other を返したとき、キーワードでフォールバック
-        // Issue #72: penaltyDetail を生成できないときはフォールバックを却下
+        // Issue #73: キーワードヒント付きで AI を再呼び出し。罰則文脈なら具体的な penaltyDetail、手続き規定なら other を維持
         if (p === "other") {
-          const keywordDetected = detectRiskByKeywords(src.rawText);
-          if (keywordDetected) {
-            const generated = generatePenaltyDetailForFallback(keywordDetected);
-            if (generated) {
-              p = keywordDetected;
-              fallbackPenaltyDetail = generated;
+          const keywords = findAllKeywordsInText(src.rawText);
+          if (keywords.length > 0) {
+            const reportInput = {
+              title: src.title,
+              type: src.type,
+              publishedAt: src.publishedAt.toISOString().slice(0, 10),
+              effectiveAt: src.effectiveAt?.toISOString().slice(0, 10) ?? null,
+              rawText: src.rawText,
+              rawTextPrev: src.rawTextPrev,
+            };
+            const report2 = await generateReportWithKeywordHint(reportInput, keywords);
+            if (report2?.primaryRiskType && report2.primaryRiskType !== "other") {
+              p = report2.primaryRiskType;
+              fallbackPenaltyDetail =
+                report2.penaltyDetailText?.trim() ||
+                generatePenaltyDetailForFallback(p) ||
+                null;
+              if (!fallbackPenaltyDetail) p = "other";
+            } else if (!report2) {
+              // API 失敗時は従来のキーワードフォールバックにフォールバック
+              const keywordDetected = detectRiskByKeywords(src.rawText);
+              if (keywordDetected) {
+                const generated = generatePenaltyDetailForFallback(keywordDetected);
+                if (generated) {
+                  p = keywordDetected;
+                  fallbackPenaltyDetail = generated;
+                }
+              }
             }
+            // report2 が other を返した場合はフォールバックを却下（手続き規定と判断）
           }
         }
         riskTypes = {

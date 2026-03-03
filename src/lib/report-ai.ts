@@ -197,3 +197,103 @@ export async function generateReport(input: ReportInput): Promise<ReportOutput |
     return null;
   }
 }
+
+/**
+ * Issue #73 試験用: キーワードヒントをインプットに追加して AI で再判定する。
+ * フォールバックが生じた際に、検出したキーワードを渡して精度向上を試す。
+ */
+export async function generateReportWithKeywordHint(
+  input: ReportInput,
+  keywords: string[]
+): Promise<ReportOutput | null> {
+  if (keywords.length === 0) return generateReport(input);
+
+  const basePrompt = buildUserPrompt(input);
+  const hint = `\n\n【補足】条文に以下のキーワードが含まれています: ${keywords.join("、")}。この情報を踏まえて、primaryRiskType と penaltyDetailText を判定してください。罰則・制裁の文脈で使われているか、手続き規定等の文脈かを区別して判断してください。`;
+  const userContent = basePrompt + hint;
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey || apiKey.trim() === "") return null;
+
+  const openai = new OpenAI({ apiKey });
+  try {
+    const completion = await openai.chat.completions.create({
+      model: MODEL,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: userContent },
+      ],
+      response_format: { type: "json_object" },
+    });
+
+    const raw = completion.choices[0]?.message?.content;
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const actionItems: ActionItemWithSource[] = Array.isArray(parsed.actionItems)
+      ? (parsed.actionItems as (string | { text?: string; source?: string })[])
+          .filter((x) => x != null)
+          .map((x): ActionItemWithSource => {
+            if (typeof x === "string") return { text: x, source: undefined };
+            const text = typeof x?.text === "string" ? x.text : "";
+            const source: RecommendationSource | undefined =
+              x?.source === "amendment" || x?.source === "existing"
+                ? (x.source as RecommendationSource)
+                : undefined;
+            return { text, source };
+          })
+          .filter((a) => a.text.trim() !== "")
+      : [];
+    const detailedRecommendations: {
+      action: string;
+      basis: string;
+      source?: RecommendationSource;
+    }[] = Array.isArray(parsed.detailedRecommendations)
+      ? (
+          parsed.detailedRecommendations as {
+            action?: string;
+            basis?: string;
+            source?: string;
+          }[]
+        )
+          .filter((x) => x && typeof x.action === "string")
+          .map((x) => ({
+            action: String(x.action),
+            basis: typeof x.basis === "string" ? x.basis : "",
+            source:
+              x.source === "amendment" || x.source === "existing"
+                ? (x.source as RecommendationSource)
+                : undefined,
+          }))
+      : [];
+
+    const penaltyDetailText =
+      parsed.penaltyDetailText === null || parsed.penaltyDetailText === undefined
+        ? undefined
+        : typeof parsed.penaltyDetailText === "string" && parsed.penaltyDetailText.trim() !== ""
+          ? parsed.penaltyDetailText.trim()
+          : null;
+
+    const primaryRiskType = ["survival", "financial", "credit", "other"].includes(
+      String(parsed.primaryRiskType)
+    )
+      ? (parsed.primaryRiskType as "survival" | "financial" | "credit" | "other")
+      : undefined;
+
+    const rawSummary = typeof parsed.summary === "string" ? parsed.summary : "";
+    const summary = stripObligationAndLevelFromSummary(rawSummary) || rawSummary;
+    return {
+      summary,
+      actionItems,
+      detailedRecommendations,
+      penaltyDetailText: penaltyDetailText ?? undefined,
+      primaryRiskType,
+    };
+  } catch (err) {
+    console.error(
+      "[report-ai] generateReportWithKeywordHint 失敗:",
+      err instanceof Error ? err.message : String(err)
+    );
+    return null;
+  }
+}
