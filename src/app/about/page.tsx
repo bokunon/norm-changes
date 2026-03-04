@@ -83,7 +83,7 @@ export default function AboutPage() {
           </li>
           <li>
             <a
-              href="https://github.com/bokunon/norm-change-alerts/blob/main/docs/architecture.md"
+              href="https://github.com/bokunon/norm-changes/blob/main/docs/architecture.md"
               target="_blank"
               rel="noopener noreferrer"
               className="text-zinc-600 dark:text-zinc-400 hover:underline font-medium"

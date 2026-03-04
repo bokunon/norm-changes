@@ -3,7 +3,7 @@
 ## 1. 問題の整理
 
 ### 事例
-- **URL**: https://spec-driven-app.vercel.app/norm-changes/cmm31ny3a00aho9u1gtu1ur1p
+- **URL**: https://norm-changes.vercel.app/norm-changes/cmm31ny3a00aho9u1gtu1ur1p
 - **法令**: 労働安全衛生法に係る登録及び指定に関する省令
 - **現状の表示**: リスクの種類「その他（手続き変更等）」、penaltyRisk: HIGH
 - **penaltyDetail**: 「適合命令・改善命令や**登録取消し・業務停止**の対象となる」
@@ -124,8 +124,43 @@ primaryRiskType: 改正により新たに発生したリスクのみを評価す
 1. **report-ai.ts**: primaryRiskType のプロンプトを「改正により新たに発生したリスク」に限定する内容に修正。✓
 2. **run-analyze.ts**: キーワード検知を廃止し、AI の primaryRiskType のみで riskSurvival 等を決定。✓
 3. **analyze.ts**: detectRiskTypes / normalizeRiskToSingle を削除。✓
-4. **scripts/reanalyze-risk-types.ts**: 洗替用スクリプトを新規作成。✓
+4. **scripts/reanalyze-risk-types.ts**: 洗替用スクリプトを新規作成。`--resume` でプログレスから続きから実行可能。✓
 5. **洗替の実行タイミング**: Issue #66 で検討。
+
+---
+
+## 6.1 洗替スクリプトの仕様
+
+- **再実行するのはアナライズのみ**。ingest（e-Gov API で法令データを取得）は行わない。
+- 既存の NormSource（DB に取り込み済みのデータ）を読み、AI レポートを再生成して NormChange を更新する。
+- **対象は未施行のみ**（施行日未定 or 施行日が今日以降）。施行済みはスキップする（run-analyze.ts と同様）。
+
+---
+
+## 6.2 洗替スクリプトの実行方法
+
+### reanalyze-risk-types.ts（Issue #65 用）
+
+```bash
+# bulkdownload 日付で指定
+npx tsx scripts/reanalyze-risk-types.ts --bulkdownload 20250625
+
+# 公示日で指定
+npx tsx scripts/reanalyze-risk-types.ts --from-date 20240101
+
+# 途中で落ちた場合、続きから再開
+npx tsx scripts/reanalyze-risk-types.ts --from-date 20240101 --resume
+npx tsx scripts/reanalyze-risk-types.ts --bulkdownload 20250625 --resume
+```
+
+### reanalyze-from-date.ts（汎用）
+
+```bash
+npx tsx scripts/reanalyze-from-date.ts 20240621
+npx tsx scripts/reanalyze-from-date.ts 20240621 --resume
+```
+
+- プログレスファイルは `scripts/*.progress.json`（.gitignore 済み）。`--resume` で前回の続きから実行可能。
 
 ---
 

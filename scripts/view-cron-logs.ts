@@ -10,7 +10,7 @@
  */
 import "dotenv/config";
 
-const BASE_URL = process.env.SITE_URL?.trim() || "https://spec-driven-app.vercel.app";
+const BASE_URL = process.env.SITE_URL?.trim() || "https://norm-changes.vercel.app";
 const CRON_SECRET = process.env.CRON_SECRET?.trim();
 
 type LogEntry = {

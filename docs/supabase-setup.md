@@ -11,7 +11,7 @@
 1. **https://supabase.com** にアクセスし、サインイン（GitHub などで OK）。
 2. ダッシュボードで **「New project」** をクリック。
 3. 以下を入力・選択して **「Create new project」** を押す。
-   - **Name**: 任意（例: `norm-change-alerts`）
+   - **Name**: 任意（例: `norm-changes`）
    - **Database Password**: 必ず **強めのパスワードを設定し、メモする**（後で接続文字列に使います）
    - **Region**: 近いリージョン（例: Northeast Asia (Tokyo)）
 4. プロビジョニングが終わるまで 1〜2 分待つ。「Project is ready」が出たら OK。
