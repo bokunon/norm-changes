@@ -68,7 +68,7 @@ npm run refresh:ingest 20250101 20250216 --resume
 例（バックグラウンドで実行）:
 
 ```bash
-cd /Users/naoki/norm-changes   # プロジェクト直下へ
+# プロジェクト直下で実行
 nohup npm run refresh:ingest 20250101 20250216 > refresh-ingest.log 2>&1 &
 ```
 
@@ -77,7 +77,7 @@ nohup npm run refresh:ingest 20250101 20250216 > refresh-ingest.log 2>&1 &
 | 項目 | 内容 |
 |------|------|
 | **ログファイル** | プロジェクト直下の `refresh-ingest.log` |
-| **フルパス** | `/Users/naoki/norm-changes/refresh-ingest.log` |
+| **フルパス** | プロジェクト直下の `refresh-ingest.log` |
 | **リアルタイム表示** | `tail -f refresh-ingest.log` |
 | **実行中か確認** | `ps aux` と `grep refresh-ingest` |
 | **プログレスファイル** | `scripts/refresh-ingest.progress.json`（`--resume` 用、.gitignore 済み） |

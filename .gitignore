@@ -30,6 +30,12 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 refresh.log
+refresh-ingest.log
+refresh-until-new.log
+reanalyze-risk-types.log
+
+# 続きから再開用のプログレスファイル（ローカル実行時）
+**/*.progress.json
 
 # env files (can opt-in for committing if needed)
 .env*

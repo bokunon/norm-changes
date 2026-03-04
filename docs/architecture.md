@@ -141,9 +141,9 @@ erDiagram
 - Web / API
   - Vercel 上に Next.js アプリをデプロイ
 - データベース
-  - Neon（マネージド PostgreSQL）を利用
+  - Supabase（マネージド PostgreSQL）を利用
 - バッチ処理（Issue #14）
-  - **e-Gov ingest**: Vercel Cron で一日1回 `/api/ingest/cron` を実行（前日分の公示データを取得）。`vercel.json` の `crons` で `0 19 * * *`（毎日 19:00 UTC = 日本時間 4:00 翌日）。本番では Vercel の Environment Variables に `CRON_SECRET` を設定すること。
+  - **e-Gov ingest**: Vercel Cron で一日1回 `/api/ingest/cron` を実行（前日分の公示データを取得）。`vercel.json` の `crons` で `0 22 * * *`（毎日 22:00 UTC = 日本時間 7:00）。本番では Vercel の Environment Variables に `CRON_SECRET` を設定すること。
   - 代替: GitHub Actions の schedule や外部 cron サービスで同エンドポイントを呼ぶことも可能。
 
 #### 環境
@@ -154,11 +154,11 @@ erDiagram
   - Slack: 開発用 Webhook / App（検証用チャンネル）
 - 開発環境（Dev）
   - Vercel: `dev` ブランチを自動デプロイ
-  - Neon: Dev 用 DB インスタンス
+  - Supabase: Dev 用 DB インスタンス
   - Slack: 開発用チャンネル（例: `#legal-dev`）
 - 本番環境（Prod）
   - Vercel: `main` ブランチを Production としてデプロイ
-  - Neon: 本番用 DB インスタンス（バックアップ有効化）
+  - Supabase: 本番用 DB インスタンス（バックアップ有効化）
   - Slack: 本番通知チャンネル（例: `#legal-alerts`）
 
 #### 環境構成図
