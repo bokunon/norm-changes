@@ -8,20 +8,21 @@ export type RiskDisplay = {
   className: string;
 };
 
+/** Issue #75: 詳細ページ用ラベル */
 const RISK_ORDER: RiskDisplay[] = [
   {
     key: "survival",
-    label: "事業継続リスク（生存）",
+    label: "事業継続（免許取消・業務停止等）",
     className: "rounded bg-amber-100 dark:bg-amber-900/40 px-2 py-1 text-sm text-amber-800 dark:text-amber-200",
   },
   {
     key: "financial",
-    label: "金銭リスク",
+    label: "罰金等（罰金・課徴金・過料等）",
     className: "rounded bg-red-100 dark:bg-red-900/40 px-2 py-1 text-sm text-red-800 dark:text-red-200",
   },
   {
     key: "credit",
-    label: "レピュテーションリスク（信用）",
+    label: "社名公表等（社名公表・勧告・警告等）",
     className: "rounded bg-sky-100 dark:bg-sky-900/40 px-2 py-1 text-sm text-sky-800 dark:text-sky-200",
   },
   {
@@ -31,10 +32,11 @@ const RISK_ORDER: RiskDisplay[] = [
   },
 ];
 
+/** Issue #75: 一覧のバッジ表示用ラベル */
 const RISK_ORDER_SHORT: { key: RiskDisplay["key"]; label: string; className: string }[] = [
-  { key: "survival", label: "生存", className: "rounded bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 text-amber-800 dark:text-amber-200" },
-  { key: "financial", label: "金銭", className: "rounded bg-red-100 dark:bg-red-900/40 px-1.5 py-0.5 text-red-800 dark:text-red-200" },
-  { key: "credit", label: "信用", className: "rounded bg-sky-100 dark:bg-sky-900/40 px-1.5 py-0.5 text-sky-800 dark:text-sky-200" },
+  { key: "survival", label: "事業継続", className: "rounded bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 text-amber-800 dark:text-amber-200" },
+  { key: "financial", label: "罰金等", className: "rounded bg-red-100 dark:bg-red-900/40 px-1.5 py-0.5 text-red-800 dark:text-red-200" },
+  { key: "credit", label: "社名公表等", className: "rounded bg-sky-100 dark:bg-sky-900/40 px-1.5 py-0.5 text-sky-800 dark:text-sky-200" },
   { key: "other", label: "その他", className: "rounded bg-zinc-200 dark:bg-zinc-600 px-1.5 py-0.5 text-zinc-700 dark:text-zinc-300" },
 ];
 

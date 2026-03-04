@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { getNormTypeLabelJa } from "@/lib/norm-types";
 import { getMostSevereRiskShort, stripObligationAndLevelFromSummary } from "@/lib/risk-display";
 
@@ -26,10 +25,11 @@ type NormChangeItem = {
   tags: { id: string; key: string; labelJa: string; type: string }[];
 };
 
+/** Issue #75: 検索条件は括弧書きで補足 */
 const RISK_LABELS: { key: "survival" | "financial" | "credit" | "other"; label: string }[] = [
-  { key: "survival", label: "生存" },
-  { key: "financial", label: "金銭" },
-  { key: "credit", label: "信用" },
+  { key: "survival", label: "事業継続（免許取消・業務停止等）" },
+  { key: "financial", label: "罰金等（罰金・課徴金・過料等）" },
+  { key: "credit", label: "社名公表等（社名公表・勧告・警告等）" },
   { key: "other", label: "その他" },
 ];
 
@@ -50,11 +50,12 @@ export default function NormChangesPage() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  // Issue #54: デフォルトは未施行・生存・金銭
+  // Issue #54: デフォルトは未施行・生存・金銭。Issue #75: 信用（社名公表等）も初期表示に含める
   const [enforcement, setEnforcement] = useState<EnforcementFilter>("not_yet");
   const [riskFilter, setRiskFilter] = useState<("survival" | "financial" | "credit" | "other")[]>([
     "survival",
     "financial",
+    "credit",
   ]);
 
   const buildParams = () => {
@@ -175,7 +176,7 @@ export default function NormChangesPage() {
                   key={item.id}
                   className="border rounded-lg p-4 bg-white dark:bg-zinc-900 dark:border-zinc-700"
                 >
-                  <Link href={`/norm-changes/${item.id}`} className="block">
+                  <div className="block">
                     <h2 className="font-semibold text-zinc-900 dark:text-zinc-100 mb-1">
                       {item.normSource?.title ?? (item.summary ?? "").slice(0, 60)}
                     </h2>
@@ -221,7 +222,7 @@ export default function NormChangesPage() {
                         </span>
                       )}
                     </div>
-                  </Link>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -240,15 +241,6 @@ export default function NormChangesPage() {
             )}
           </>
         )}
-        {/* Issue #55: サブリンクを右下に配置 */}
-        <div className="mt-12 flex justify-end">
-          <a
-            href="/about"
-            className="text-sm text-zinc-500 dark:text-zinc-400 hover:underline"
-          >
-            設定・DB・アーキテクチャ等
-          </a>
-        </div>
       </div>
     </div>
   );

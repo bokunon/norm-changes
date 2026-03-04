@@ -26,10 +26,11 @@ type NotificationFilterItem = {
   updatedAt: string;
 };
 
+/** Issue #75: 検索条件は括弧書きで補足 */
 const RISK_LABELS: { key: "survival" | "financial" | "credit" | "other"; label: string }[] = [
-  { key: "survival", label: "生存" },
-  { key: "financial", label: "金銭" },
-  { key: "credit", label: "信用" },
+  { key: "survival", label: "事業継続（免許取消・業務停止等）" },
+  { key: "financial", label: "罰金等（罰金・課徴金・過料等）" },
+  { key: "credit", label: "社名公表等（社名公表・勧告・警告等）" },
   { key: "other", label: "その他" },
 ];
 
@@ -162,9 +163,9 @@ export default function SettingsPage() {
     if (f.publishedFrom) parts.push(`公示日 From: ${f.publishedFrom}`);
     if (f.publishedTo) parts.push(`To: ${f.publishedTo}`);
     const risks = [];
-    if (f.riskSurvival) risks.push("生存");
-    if (f.riskFinancial) risks.push("金銭");
-    if (f.riskCredit) risks.push("信用");
+    if (f.riskSurvival) risks.push("事業継続");
+    if (f.riskFinancial) risks.push("罰金等");
+    if (f.riskCredit) risks.push("社名公表等");
     if (f.riskOther) risks.push("その他");
     if (risks.length) parts.push(`リスク: ${risks.join(", ")}`);
     if (f.normType) {
@@ -240,7 +241,7 @@ export default function SettingsPage() {
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="例: 生存リスクのみ"
+                    placeholder="例: 事業継続リスクのみ"
                   className="mt-1 block w-full max-w-xs border rounded px-2 py-1.5 dark:bg-zinc-800 dark:border-zinc-600"
                 />
               </label>
@@ -276,7 +277,7 @@ export default function SettingsPage() {
                       onChange={(e) => setRiskSurvival(e.target.checked)}
                       className="rounded border-zinc-400"
                     />
-                    生存
+                    事業継続（免許取消・業務停止等）
                   </label>
                   <label className="flex items-center gap-1">
                     <input
@@ -285,7 +286,7 @@ export default function SettingsPage() {
                       onChange={(e) => setRiskFinancial(e.target.checked)}
                       className="rounded border-zinc-400"
                     />
-                    金銭
+                    罰金等（罰金・課徴金・過料等）
                   </label>
                   <label className="flex items-center gap-1">
                     <input
@@ -294,7 +295,7 @@ export default function SettingsPage() {
                       onChange={(e) => setRiskCredit(e.target.checked)}
                       className="rounded border-zinc-400"
                     />
-                    信用
+                    社名公表等（社名公表・勧告・警告等）
                   </label>
                   <label className="flex items-center gap-1">
                     <input
