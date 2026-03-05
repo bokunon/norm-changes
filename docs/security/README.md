@@ -21,6 +21,6 @@ docs/security/
 
 ## 再実行方法
 
-- **SAST**: `semgrep scan --config=p/owasp-top-ten --config=p/javascript --exclude=node_modules`
-- **SCA**: `npm audit`
+- **SAST**: `gh workflow run sast-semgrep.yml`
+- **SCA**: `gh workflow run sca-npm-audit.yml`
 - **DAST**: `gh workflow run dast-zap.yml`
