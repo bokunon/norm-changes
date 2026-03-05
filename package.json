@@ -16,8 +16,8 @@
     "view:cron-logs": "tsx scripts/view-cron-logs.ts"
   },
   "dependencies": {
-    "@prisma/adapter-pg": "^7.4.0",
-    "@prisma/client": "^7.4.0",
+    "@prisma/adapter-pg": "^7.4.2",
+    "@prisma/client": "^7.4.2",
     "@vercel/analytics": "^1.6.1",
     "adm-zip": "^0.5.16",
     "dotenv-expand": "^12.0.3",
@@ -37,7 +37,7 @@
     "dotenv": "^16.4.5",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
-    "prisma": "^7.4.0",
+    "prisma": "^7.4.2",
     "tailwindcss": "^4",
     "tsx": "^4.19.2",
     "typescript": "^5",
