@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getNormTypeLabelJa } from "@/lib/norm-types";
 import { getMostSevereRiskShort, stripObligationAndLevelFromSummary } from "@/lib/risk-display";
@@ -178,7 +179,12 @@ export default function NormChangesPage() {
                 >
                   <div className="block">
                     <h2 className="font-semibold text-zinc-900 dark:text-zinc-100 mb-1">
-                      {item.normSource?.title ?? (item.summary ?? "").slice(0, 60)}
+                      <Link
+                        href={`/norm-changes/${item.id}`}
+                        className="hover:underline focus:underline focus:outline-none"
+                      >
+                        {item.normSource?.title ?? (item.summary ?? "").slice(0, 60)}
+                      </Link>
                     </h2>
                     <p className="text-sm text-zinc-600 dark:text-zinc-400 line-clamp-2 mb-2">
                       {stripObligationAndLevelFromSummary(item.summary) || (item.summary ?? "")}
