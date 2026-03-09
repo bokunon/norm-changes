@@ -108,9 +108,15 @@ export default function NormChangesPage() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-6">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-4">
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
           法令変更・インパクト一覧
         </h1>
+        <p className="text-zinc-700 dark:text-zinc-300 mb-1">
+          法令変更の影響を生成 AI で整理する実験用ツールです。
+        </p>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">
+          内容の正確性は保証しません。ご利用の際は官報・省庁公式情報をご確認ください。
+        </p>
         <div className="flex flex-wrap gap-4 mb-6">
           {/* Issue #53: 施行状態で絞り込み */}
           <fieldset className="flex flex-wrap items-center gap-2 text-sm">
