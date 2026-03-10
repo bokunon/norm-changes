@@ -41,3 +41,32 @@ export async function notifySlack(payload: {
     };
   }
 }
+
+/**
+ * cron 失敗時の運用アラートを Slack に送信する。
+ * SLACK_WEBHOOK_URL が設定されている場合のみ送信。
+ */
+export async function notifySlackAlert(payload: {
+  title: string;
+  message: string;
+  hint?: string;
+}): Promise<void> {
+  const url = process.env.SLACK_WEBHOOK_URL;
+  if (!url || url === "") return;
+
+  const lines = [
+    `🚨 *[norm-changes] ${payload.title}*`,
+    payload.message,
+    payload.hint ? `\n💡 ${payload.hint}` : null,
+  ].filter(Boolean).join("\n");
+
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: lines }),
+    });
+  } catch {
+    // アラート送信失敗は握りつぶす（ログ記録はされている）
+  }
+}

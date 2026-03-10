@@ -19,6 +19,7 @@ import {
   setLastSuccessfulIngestDate,
 } from "@/lib/ingest-state";
 import { runAnalyzeForPendingSources, isAnalyzeAborted } from "@/lib/run-analyze";
+import { notifySlack, notifySlackAlert } from "@/lib/slack";
 
 function formatYyyyMMdd(d: Date): string {
   const y = d.getFullYear();
@@ -135,6 +136,11 @@ export async function GET(request: Request) {
       const analyzeResult = await runAnalyzeForPendingSources({});
       if (isAnalyzeAborted(analyzeResult)) {
         await finishCronLog(log.id, startedAt, "aborted", [], "AI レポートを生成できません。API キー設定を確認し、次回の実行をお待ちください。");
+        await notifySlackAlert({
+          title: "cron中断（AI分析不可）",
+          message: "AI レポートを生成できません。OPENAI_API_KEY の設定を確認してください。",
+          hint: "設定後、手動で /api/ingest/cron を呼ぶと再開できます。",
+        });
         return NextResponse.json(
           { ok: false, aborted: true, error: "AI レポートを生成できません。API キー設定を確認し、次回の実行をお待ちください。" },
           { status: 503 }
@@ -223,6 +229,11 @@ export async function GET(request: Request) {
 
     if (failedDate) {
       await finishCronLog(log.id, startedAt, "error", processedDates, failedError);
+      await notifySlackAlert({
+        title: "cron失敗",
+        message: `日付: ${failedDate ?? "不明"}\nエラー: ${failedError ?? "不明"}`,
+        hint: "次回 cron で続きから再試行されます（手動実行: /api/ingest/cron）",
+      });
       return NextResponse.json({
         ok: false,
         failedDate,
