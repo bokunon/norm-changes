@@ -1,10 +1,13 @@
 /**
- * Issue #12: 法令本文を元に企業向けレポート（何をすべきか）を OpenAI で生成する
+ * 法令本文を元に企業向けレポート（何をすべきか）を OpenAI で生成する
  * 入力: rawText + rawTextPrev（あれば）+ 法令メタ
  * 出力: サマリ・箇条書きアクション・詳細推奨アクション＋根拠（構造化 JSON）
  */
 import OpenAI from "openai";
 import { stripObligationAndLevelFromSummary } from "@/lib/risk-display";
+
+const RAW_TEXT_MAX = parseInt(process.env.OPENAI_RAW_TEXT_MAX ?? "8000", 10);
+const RAW_TEXT_PREV_MAX = parseInt(process.env.OPENAI_RAW_TEXT_PREV_MAX ?? "4000", 10);
 
 export interface ReportInput {
   title: string;
@@ -15,7 +18,7 @@ export interface ReportInput {
   rawTextPrev: string | null;
 }
 
-/** Issue #37: 推奨アクションの出典（元法 vs 改正） */
+/** 推奨アクションの出典（元法 vs 改正） */
 export type RecommendationSource = "amendment" | "existing";
 
 /** 取るべきアクション（ポイント）1件。source で「今回の改正で変わったか」を明示 */
@@ -30,7 +33,7 @@ export interface ReportOutput {
     basis: string;
     source?: RecommendationSource;
   }[];
-  /** Issue #36: 改正後に発生した罰則・義務リスクについての解釈を断定で1文 */
+  /** 改正後に発生した罰則・義務リスクについての解釈を断定で1文 */
   penaltyDetailText?: string | null;
   /**
    * 当該改正で最も厳しいリスクを1つだけ。
@@ -57,7 +60,7 @@ JSON の形式:
   "penaltyDetailText": "primaryRiskType の判定根拠（1文）。survival/financial/credit のときは必ず記載。other のときは null"
 }
 
-- **primaryRiskType と penaltyDetailText は同一の推論で一貫して返す**（Issue #71）。リスク判定とその根拠を同時に出力する。
+- **primaryRiskType と penaltyDetailText は同一の推論で一貫して返す**。リスク判定とその根拠を同時に出力する。
 - primaryRiskType: **改正により新たに発生したリスクのみ**を評価する。必ず4つのいずれか1つだけを返す。
   - 改正前の条文に既にあった規定は含めない。
   - **改正前の全文が無い場合**（新規制定・前版取得不可等）は、改正後の全文に記載されている罰則・義務リスクを**すべて新規として評価する**。
@@ -86,14 +89,14 @@ function buildUserPrompt(input: ReportInput): string {
   ];
 
   if (input.rawTextPrev && input.rawTextPrev.trim()) {
-    parts.push("# 改正前の全文（抜粋: 先頭4000文字）");
-    parts.push(input.rawTextPrev.slice(0, 4000) + (input.rawTextPrev.length > 4000 ? "…" : ""));
+    parts.push(`# 改正前の全文（抜粋: 先頭${RAW_TEXT_PREV_MAX}文字）`);
+    parts.push(input.rawTextPrev.slice(0, RAW_TEXT_PREV_MAX) + (input.rawTextPrev.length > RAW_TEXT_PREV_MAX ? "…" : ""));
     parts.push("");
   }
 
-  parts.push("# 改正後の全文（抜粋: 先頭8000文字）");
+  parts.push(`# 改正後の全文（抜粋: 先頭${RAW_TEXT_MAX}文字）`);
   const text = input.rawText ?? input.title;
-  parts.push(text.slice(0, 8000) + (text.length > 8000 ? "…" : ""));
+  parts.push(text.slice(0, RAW_TEXT_MAX) + (text.length > RAW_TEXT_MAX ? "…" : ""));
 
   return parts.join("\n");
 }
@@ -179,7 +182,7 @@ export async function generateReport(input: ReportInput): Promise<ReportOutput |
       ? (parsed.primaryRiskType as "survival" | "financial" | "credit" | "other")
       : undefined;
 
-    // Issue #67: validateRiskTypeInText は廃止。偽陰性を招くため、AI の判定をそのまま採用する。
+    // validateRiskTypeInText は廃止。偽陰性を招くため、AI の判定をそのまま採用する。
 
     // 対応重要度は表示しない方針のため、AI が含めていても除去してから返す
     const rawSummary = typeof parsed.summary === "string" ? parsed.summary : "";
@@ -199,7 +202,7 @@ export async function generateReport(input: ReportInput): Promise<ReportOutput |
 }
 
 /**
- * Issue #73 試験用: キーワードヒントをインプットに追加して AI で再判定する。
+ * キーワードヒントをインプットに追加して AI で再判定する。
  * フォールバックが生じた際に、検出したキーワードを渡して精度向上を試す。
  */
 export async function generateReportWithKeywordHint(

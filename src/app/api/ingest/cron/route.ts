@@ -1,14 +1,14 @@
 /**
- * Issue #14: 一日1回の e-Gov ingest 用エンドポイント
+ * 一日1回の e-Gov ingest 用エンドポイント
  * Vercel Cron または GitHub Actions から呼ばれる想定。CRON_SECRET で認証する。
  * 実行時刻: 日本時間 7:00（vercel.json の schedule: "0 22 * * *" = UTC 22:00）
  *
  * - 取り込み範囲: 前回成功した日の翌日 〜 UTC の前日（コケた場合も次回は続きから再開）
  * - maxDays: クエリパラメータ。1回の実行で処理する最大日数（未指定時は全期間）。大量の backlog 時にタイムアウトを防ぐ
- * - Issue #50: 各日ごとに ingest → analyze → setLastSuccess。lastSuccess は「ingest と analyze の両方完了」を意味
+ * - 各日ごとに ingest → analyze → setLastSuccess。lastSuccess は「ingest と analyze の両方完了」を意味
  * - ingest 成功後に analyze が失敗した場合、次回は analyze から再開（ingest はスキップ）
- * - Issue #52: 実行開始・終了を CronExecutionLog に記録
- * - Issue #63: refresh-ingest と同様の statement_timeout 延長・リトライ・接続リフレッシュ・delayAfterPrevMs を適用
+ * - 実行開始・終了を CronExecutionLog に記録
+ * - statement_timeout 延長・リトライ・接続リフレッシュ・delayAfterPrevMs を適用（Vercel タイムアウト対策）
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -62,7 +62,7 @@ function dateRangeInclusive(startYyyyMMdd: string, endYyyyMMdd: string): string[
   return out;
 }
 
-/** Issue #52: cron 実行ログを完了して返す */
+/** cron 実行ログを完了して返す */
 async function finishCronLog(
   logId: string,
   startedAt: Date,
@@ -96,7 +96,6 @@ export async function GET(request: Request) {
   const endDate = yesterdayYyyyMMdd();
   const startedAt = new Date();
 
-  // Issue #52: 実行開始を記録
   const log = await prisma.cronExecutionLog.create({
     data: {
       startedAt,
@@ -122,13 +121,13 @@ export async function GET(request: Request) {
       dates = dates.slice(0, maxDays);
     }
 
-    // Issue #63: statement_timeout を 10 分に延長
+    // statement_timeout を 10 分に延長（Vercel タイムアウト対策）
     await setStatementTimeoutLong();
 
-    // Issue #63: e-Gov 負荷軽減のため 100ms 待機（Vercel タイムアウトを考慮して refresh-ingest より短め）
+    // e-Gov 負荷軽減のため 100ms 待機（Vercel タイムアウトを考慮して refresh-ingest より短め）
     const delayAfterPrevMs = 100;
 
-    // Issue #63: 同一日付で最大 2 回リトライ（計 3 回実行）
+    // 同一日付で最大 2 回リトライ（計 3 回実行）
     const MAX_RETRIES = 2;
 
     if (dates.length === 0) {
@@ -166,7 +165,7 @@ export async function GET(request: Request) {
       });
     }
 
-    // Issue #50: 日単位で ingest → analyze → setLastSuccess。analyze 失敗時は lastSuccess を進めず次回再試行
+    // 日単位で ingest → analyze → setLastSuccess。analyze 失敗時は lastSuccess を進めず次回再試行
     const processed: { date: string; total: number; created: number; updated: number; analyzeCreated?: number }[] = [];
     let failedDate: string | null = null;
     let failedError: string | null = null;
@@ -174,7 +173,7 @@ export async function GET(request: Request) {
     for (let i = 0; i < dates.length; i++) {
       const yyyyMMdd = dates[i];
 
-      // Issue #63: 複数日処理時に 2 日目で接続をリフレッシュ
+      // 複数日処理時に 2 日目で接続をリフレッシュ（Vercel タイムアウト対策）
       if (i === 1 && dates.length >= 2) {
         await refreshConnection();
       }

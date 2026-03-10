@@ -19,7 +19,7 @@ export interface RunAnalyzeOptions {
   normSourceId?: string | null;
   /** true のとき既存 NormChange を削除して再解析（normSourceId 指定時のみ有効） */
   replace?: boolean;
-  /** Issue #50: 指定時はこの bulkdownload 日付（yyyyMMdd）の NormSource のみ対象。cron の日単位連動用 */
+  /** 指定時はこの bulkdownload 日付（yyyyMMdd）の NormSource のみ対象。cron の日単位連動用 */
   bulkdownloadDate?: string | null;
 }
 
@@ -27,9 +27,9 @@ export interface RunAnalyzeResult {
   ok: true;
   created: number;
   ids: string[];
-  /** Issue #44: 施行日が今日より前のためスキップした件数（normSourceId 指定時は undefined） */
+  /** 施行日が今日より前のためスキップした件数（normSourceId 指定時は undefined） */
   skippedEffectivePast?: number;
-  /** Issue #44: 既に NormChange がある件数（normSourceId 指定時は undefined） */
+  /** 既に NormChange がある件数（normSourceId 指定時は undefined） */
   alreadyAnalyzed?: number;
 }
 
@@ -38,7 +38,7 @@ export interface RunAnalyzeError {
   error: string;
 }
 
-/** Issue #40: AI レポートが作れない場合は登録せず処理を打ち切る */
+/** AI レポートが作れない場合は登録せず処理を打ち切る */
 export interface RunAnalyzeAborted {
   ok: false;
   aborted: true;
@@ -74,7 +74,6 @@ export async function runAnalyzeForPendingSources(
 
   const todayStart = startOfTodayUtc();
 
-  // Issue #44: 統計用（normSourceId 指定時はスキップ）
   let skippedEffectivePast: number | undefined;
   let alreadyAnalyzed: number | undefined;
   if (!normSourceId) {
@@ -132,7 +131,7 @@ export async function runAnalyzeForPendingSources(
 
   const created: string[] = [];
 
-  // Issue #40: AI レポートが作れない場合は NormChange を登録せず処理を打ち切る
+  // OPENAI_API_KEY が未設定の場合は登録せず処理を打ち切る（AI レポートは必須）
   if (sources.length > 0 && !process.env.OPENAI_API_KEY?.trim()) {
     return { ok: false, aborted: true, reason: "AI_REPORT_UNAVAILABLE" };
   }
@@ -140,7 +139,7 @@ export async function runAnalyzeForPendingSources(
   try {
     for (const src of sources) {
       let summary = buildSummary(src.title, src.rawText);
-      // Issue #65: リスクの種類は AI の primaryRiskType のみで決定（キーワード検知は廃止）
+      // リスクの種類は AI の primaryRiskType のみで決定（キーワード検知は廃止）
       let riskTypes = {
         survival: false,
         financial: false,
@@ -164,7 +163,6 @@ export async function runAnalyzeForPendingSources(
         rawTextPrev: src.rawTextPrev,
       });
 
-      // Issue #40: AI レポートが 1 件でも作れなかったら登録せず打ち切り
       if (!report) {
         return { ok: false, aborted: true, reason: "AI_REPORT_UNAVAILABLE" };
       }
@@ -186,8 +184,8 @@ export async function runAnalyzeForPendingSources(
       let fallbackPenaltyDetail: string | null = null;
       if (report.primaryRiskType) {
         let p = report.primaryRiskType;
-        // Issue #67: AI が other を返したとき、キーワードでフォールバック
-        // Issue #73: キーワードヒント付きで AI を再呼び出し。罰則文脈なら具体的な penaltyDetail、手続き規定なら other を維持
+        // AI が other を返したとき、キーワードでフォールバック:
+        // キーワードヒント付きで AI を再呼び出し。罰則文脈なら具体的な penaltyDetail、手続き規定なら other を維持
         if (p === "other") {
           const keywords = findAllKeywordsInText(src.rawText);
           if (keywords.length > 0) {
@@ -236,31 +234,34 @@ export async function runAnalyzeForPendingSources(
         ? (report.penaltyDetailText?.trim() || fallbackPenaltyDetail || null)
         : null;
 
-      const change = await prisma.normChange.create({
-        data: {
-          normSourceId: src.id,
-          summary,
-          penaltyDetail,
-          riskSurvival: riskTypes.survival,
-          riskFinancial: riskTypes.financial,
-          riskCredit: riskTypes.credit,
-          riskOther: riskTypes.other,
-          effectiveFrom: src.effectiveAt ?? null,
-          reportActionItems: reportActionItems ?? undefined,
-          reportDetailedRecommendations: reportDetailedRecommendations ?? undefined,
-        },
+      const tagIds =
+        tagIdsToRestore.length > 0 && normSourceId && src.id === normSourceId
+          ? tagIdsToRestore
+          : [];
+      const change = await prisma.$transaction(async (tx) => {
+        const c = await tx.normChange.create({
+          data: {
+            normSourceId: src.id,
+            summary,
+            penaltyDetail,
+            riskSurvival: riskTypes.survival,
+            riskFinancial: riskTypes.financial,
+            riskCredit: riskTypes.credit,
+            riskOther: riskTypes.other,
+            effectiveFrom: src.effectiveAt ?? null,
+            reportActionItems: reportActionItems ?? undefined,
+            reportDetailedRecommendations: reportDetailedRecommendations ?? undefined,
+          },
+        });
+        if (tagIds.length > 0) {
+          await tx.normChangeTag.createMany({
+            data: tagIds.map((tagId) => ({ normChangeId: c.id, tagId })),
+            skipDuplicates: true,
+          });
+        }
+        return c;
       });
       created.push(change.id);
-
-      if (tagIdsToRestore.length > 0 && normSourceId && src.id === normSourceId) {
-        await prisma.normChangeTag.createMany({
-          data: tagIdsToRestore.map((tagId) => ({
-            normChangeId: change.id,
-            tagId,
-          })),
-          skipDuplicates: true,
-        });
-      }
 
       const notificationFilters = await prisma.notificationFilter.findMany();
       if (notificationFilters.length > 0) {

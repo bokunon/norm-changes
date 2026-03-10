@@ -1,8 +1,6 @@
 /**
  * e-Gov bulkdownload（日付指定・更新法令データ）の取得とパース
  * https://laws.e-gov.go.jp/bulkdownload?file_section=3&update_date={yyyyMMdd}&only_xml_flag=true
- * Issue #22, #23 対応
- * Issue #24: ZIP 内 XML 本文の取り込み（NormSource.rawText）
  */
 import { gunzipSync } from "node:zlib";
 import AdmZip from "adm-zip";
@@ -145,7 +143,7 @@ function parseDateString(s: string): Date | null {
   return null;
 }
 
-/** CSV 1行を NormSource 用フィールドに変換（#23: 公示日は改正法令公布日、空なら公布日） */
+/** CSV 1行を NormSource 用フィールドに変換（公示日は改正法令公布日、空なら公布日） */
 export interface BulkdownloadRowFields {
   externalId: string | null;
   type: string;
@@ -155,9 +153,9 @@ export interface BulkdownloadRowFields {
   publishedAt: Date;
   effectiveAt: Date | null;
   url: string | null;
-  /** 改正後全文（ZIP 内 XML から抽出。Issue #24） */
+  /** 改正後全文（ZIP 内 XML から抽出） */
   rawText: string | null;
-  /** ZIP ディレクトリ名の改正ID（{法令ID}_{日付}_{改正ID}）。Issue #25 で一つ前の revision 特定に使用 */
+  /** ZIP ディレクトリ名の改正ID（{法令ID}_{日付}_{改正ID}）。一つ前の revision 特定に使用 */
   amendmentRevisionId?: string | null;
 }
 
@@ -173,7 +171,7 @@ export function csvRowToNormSourceFields(
   const number = getCell(row, colIndex, "法令番号") || null;
   const url = getCell(row, colIndex, "本文URL") || null;
 
-  // #23: 公示日は「改正法令公布日」、空なら「公布日」
+  // 公示日は「改正法令公布日」、空なら「公布日」
   const amendDateStr = getCell(row, colIndex, "改正法令公布日");
   const promulgationDateStr = getCell(row, colIndex, "公布日");
   const publishedAt = parseDateString(amendDateStr || promulgationDateStr);
@@ -196,7 +194,7 @@ export function csvRowToNormSourceFields(
   };
 }
 
-/** 法令標準 XML から条文テキストを再帰的に収集（#24） */
+/** 法令標準 XML から条文テキストを再帰的に収集 */
 function collectTextFromNode(node: unknown, out: string[]): void {
   if (node == null) return;
   if (typeof node === "string") {
@@ -222,7 +220,7 @@ function collectTextFromNode(node: unknown, out: string[]): void {
 }
 
 /**
- * bulkdownload ZIP 内の法令 XML（Law/LawBody/本則・附則）から条文全文テキストを抽出（#24）
+ * bulkdownload ZIP 内の法令 XML（Law/LawBody/本則・附則）から条文全文テキストを抽出
  * 法令標準XMLスキーマに沿った LawBody 内の Article/Paragraph 等からテキストを集める
  */
 export function parseLawXmlToRawText(xmlString: string): string {
@@ -373,7 +371,7 @@ export async function fetchBulkdownloadList(
     if (fields) rows.push(fields);
   }
 
-  // #24: ZIP 内の法令別 XML から改正後全文（rawText）と改正ID（#25 用）を付与
+  // ZIP 内の法令別 XML から改正後全文（rawText）と改正ID を付与
   const xmlByLawId: Record<string, { rawText: string; amendmentRevisionId: string }> = {};
   for (const entry of entries) {
     if (entry.isDirectory || !entry.entryName.endsWith(".xml")) continue;

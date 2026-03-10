@@ -5,6 +5,7 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { apiError, ErrorCode } from "@/lib/api-response";
 
 function toIsoDate(d: Date | null): string | null {
   return d ? d.toISOString().slice(0, 10) : null;
@@ -18,7 +19,7 @@ export async function GET(
     const { id } = await params;
     const filter = await prisma.notificationFilter.findUnique({ where: { id } });
     if (!filter) {
-      return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+      return apiError(ErrorCode.NOT_FOUND, "Not found", 404);
     }
     return NextResponse.json({
       ok: true,
@@ -38,11 +39,8 @@ export async function GET(
       },
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    return NextResponse.json(
-      { ok: false, error: message },
-      { status: 500 }
-    );
+    console.error("[notification-filters/[id]] GET 失敗:", e instanceof Error ? e.message : String(e));
+    return apiError(ErrorCode.INTERNAL_ERROR, "サーバーエラーが発生しました", 500);
   }
 }
 
@@ -55,6 +53,6 @@ export async function DELETE(
     await prisma.notificationFilter.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch {
-    return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+    return apiError(ErrorCode.NOT_FOUND, "Not found", 404);
   }
 }
