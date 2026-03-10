@@ -5,6 +5,7 @@
  */
 import OpenAI from "openai";
 import { stripObligationAndLevelFromSummary } from "@/lib/risk-display";
+import logger from "@/lib/logger";
 
 const RAW_TEXT_MAX = parseInt(process.env.OPENAI_RAW_TEXT_MAX ?? "8000", 10);
 const RAW_TEXT_PREV_MAX = parseInt(process.env.OPENAI_RAW_TEXT_PREV_MAX ?? "4000", 10);
@@ -190,7 +191,7 @@ async function callOpenAI(systemPrompt: string, userPrompt: string): Promise<Rep
       primaryRiskType,
     };
   } catch (err) {
-    console.error("[report-ai]", err instanceof Error ? err.message : String(err));
+    logger.error({ err }, "[report-ai] OpenAI呼び出し失敗");
     return null;
   }
 }
