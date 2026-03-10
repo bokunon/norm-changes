@@ -105,126 +105,22 @@ function buildUserPrompt(input: ReportInput): string {
 const MODEL = "gpt-5-mini";
 
 /**
- * OpenAI でレポートを生成する。API Key 未設定やエラー時は null を返す。
- * primaryRiskType が survival / financial / credit のときは検証を行い、
- * 条文に該当する規定が無ければ other に上書きする。other は検証しない。
+ * OpenAI を呼び出して JSON をパースし ReportOutput を返す private ヘルパー。
+ * API キー未設定・呼び出し失敗・パースエラー時は null を返す。
  */
-export async function generateReport(input: ReportInput): Promise<ReportOutput | null> {
+async function callOpenAI(systemPrompt: string, userPrompt: string): Promise<ReportOutput | null> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey || apiKey.trim() === "") return null;
 
   const openai = new OpenAI({ apiKey });
-  const userContent = buildUserPrompt(input);
 
   try {
-    // gpt-5-mini でレポート生成（指示遵守を優先）。コスト優先なら gpt-5-nano に変更可
     // モデルによっては temperature はデフォルト(1)のみサポート。0.3 を指定すると 400 になるため省略
     const completion = await openai.chat.completions.create({
       model: MODEL,
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userContent },
-      ],
-      response_format: { type: "json_object" },
-    });
-
-    const raw = completion.choices[0]?.message?.content;
-    if (!raw) return null;
-
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const actionItems: ActionItemWithSource[] = Array.isArray(parsed.actionItems)
-      ? (parsed.actionItems as (string | { text?: string; source?: string })[])
-          .filter((x) => x != null)
-          .map((x): ActionItemWithSource => {
-            if (typeof x === "string") return { text: x, source: undefined };
-            const text = typeof x?.text === "string" ? x.text : "";
-            const source: RecommendationSource | undefined =
-              x?.source === "amendment" || x?.source === "existing"
-                ? (x.source as RecommendationSource)
-                : undefined;
-            return { text, source };
-          })
-          .filter((a) => a.text.trim() !== "")
-      : [];
-    const detailedRecommendations: {
-      action: string;
-      basis: string;
-      source?: RecommendationSource;
-    }[] = Array.isArray(parsed.detailedRecommendations)
-      ? (
-          parsed.detailedRecommendations as {
-            action?: string;
-            basis?: string;
-            source?: string;
-          }[]
-        )
-          .filter((x) => x && typeof x.action === "string")
-          .map((x) => ({
-            action: String(x.action),
-            basis: typeof x.basis === "string" ? x.basis : "",
-            source:
-              x.source === "amendment" || x.source === "existing"
-                ? (x.source as RecommendationSource)
-                : undefined,
-          }))
-      : [];
-
-    const penaltyDetailText =
-      parsed.penaltyDetailText === null || parsed.penaltyDetailText === undefined
-        ? undefined
-        : typeof parsed.penaltyDetailText === "string" && parsed.penaltyDetailText.trim() !== ""
-          ? parsed.penaltyDetailText.trim()
-          : null;
-
-    let primaryRiskType = ["survival", "financial", "credit", "other"].includes(
-      String(parsed.primaryRiskType)
-    )
-      ? (parsed.primaryRiskType as "survival" | "financial" | "credit" | "other")
-      : undefined;
-
-    // validateRiskTypeInText は廃止。偽陰性を招くため、AI の判定をそのまま採用する。
-
-    // 対応重要度は表示しない方針のため、AI が含めていても除去してから返す
-    const rawSummary = typeof parsed.summary === "string" ? parsed.summary : "";
-    const summary = stripObligationAndLevelFromSummary(rawSummary) || rawSummary;
-    return {
-      summary,
-      actionItems,
-      detailedRecommendations,
-      penaltyDetailText: penaltyDetailText ?? undefined,
-      primaryRiskType,
-    };
-  } catch (err) {
-    // API キーは読めているが呼び出し失敗時は原因をログに残す（読み取り側の問題かどうか切り分け用）
-    console.error("[report-ai] generateReport 失敗:", err instanceof Error ? err.message : String(err));
-    return null;
-  }
-}
-
-/**
- * キーワードヒントをインプットに追加して AI で再判定する。
- * フォールバックが生じた際に、検出したキーワードを渡して精度向上を試す。
- */
-export async function generateReportWithKeywordHint(
-  input: ReportInput,
-  keywords: string[]
-): Promise<ReportOutput | null> {
-  if (keywords.length === 0) return generateReport(input);
-
-  const basePrompt = buildUserPrompt(input);
-  const hint = `\n\n【補足】条文に以下のキーワードが含まれています: ${keywords.join("、")}。この情報を踏まえて、primaryRiskType と penaltyDetailText を判定してください。罰則・制裁の文脈で使われているか、手続き規定等の文脈かを区別して判断してください。`;
-  const userContent = basePrompt + hint;
-
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey || apiKey.trim() === "") return null;
-
-  const openai = new OpenAI({ apiKey });
-  try {
-    const completion = await openai.chat.completions.create({
-      model: MODEL,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userContent },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
       ],
       response_format: { type: "json_object" },
     });
@@ -283,6 +179,7 @@ export async function generateReportWithKeywordHint(
       ? (parsed.primaryRiskType as "survival" | "financial" | "credit" | "other")
       : undefined;
 
+    // 対応重要度は表示しない方針のため、AI が含めていても除去してから返す
     const rawSummary = typeof parsed.summary === "string" ? parsed.summary : "";
     const summary = stripObligationAndLevelFromSummary(rawSummary) || rawSummary;
     return {
@@ -293,10 +190,39 @@ export async function generateReportWithKeywordHint(
       primaryRiskType,
     };
   } catch (err) {
-    console.error(
-      "[report-ai] generateReportWithKeywordHint 失敗:",
-      err instanceof Error ? err.message : String(err)
-    );
+    console.error("[report-ai]", err instanceof Error ? err.message : String(err));
     return null;
   }
+}
+
+/**
+ * OpenAI でレポートを生成する。API Key 未設定やエラー時は null を返す。
+ * keywords を指定すると、条文内キーワードのヒントをプロンプトに付加して
+ * primaryRiskType と penaltyDetailText の精度を向上させる。
+ */
+export async function generateReport(
+  input: ReportInput,
+  keywords?: string[]
+): Promise<ReportOutput | null> {
+  const basePrompt = buildUserPrompt(input);
+  let userPrompt = basePrompt;
+
+  if (keywords && keywords.length > 0) {
+    userPrompt +=
+      `\n\n【補足】条文に以下のキーワードが含まれています: ${keywords.join("、")}。この情報を踏まえて、primaryRiskType と penaltyDetailText を判定してください。罰則・制裁の文脈で使われているか、手続き規定等の文脈かを区別して判断してください。`;
+  }
+
+  return callOpenAI(SYSTEM_PROMPT, userPrompt);
+}
+
+/**
+ * キーワードヒントをインプットに追加して AI でレポートを生成する。
+ * keywords が空の場合はヒントなしで generateReport と同じ動作をする。
+ * generateReport(input, keywords) の後方互換エイリアス。
+ */
+export async function generateReportWithKeywordHint(
+  input: ReportInput,
+  keywords: string[]
+): Promise<ReportOutput | null> {
+  return generateReport(input, keywords);
 }
