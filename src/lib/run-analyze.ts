@@ -4,15 +4,14 @@
  */
 import { prisma } from "@/lib/prisma";
 import { buildSummary } from "@/lib/analyze";
-import { notifySlack } from "@/lib/slack";
 import { generateReport, generateReportWithKeywordHint } from "@/lib/report-ai";
 import {
   detectRiskByKeywords,
   findAllKeywordsInText,
   generatePenaltyDetailForFallback,
 } from "@/lib/risk-keyword-fallback";
-import { matchesNotificationFilter } from "@/lib/notification-filter-match";
 import { stripObligationAndLevelFromSummary } from "@/lib/risk-display";
+import { notifyOnChange } from "@/lib/notify-on-change";
 
 export interface RunAnalyzeOptions {
   /** 指定時はその NormSource のみ解析。省略時は NormChange がまだない全件 */
@@ -263,35 +262,7 @@ export async function runAnalyzeForPendingSources(
       });
       created.push(change.id);
 
-      const notificationFilters = await prisma.notificationFilter.findMany();
-      if (notificationFilters.length > 0) {
-        const changeWithTags = await prisma.normChange.findUnique({
-          where: { id: change.id },
-          include: { tags: true },
-        });
-        const hasTagId = (tagId: string) =>
-          (changeWithTags?.tags.some((t) => t.tagId === tagId) ?? false);
-        const shouldNotify = notificationFilters.some((f) =>
-          matchesNotificationFilter(
-            change,
-            src,
-            f,
-            f.tagId ? hasTagId(f.tagId) : true
-          )
-        );
-        if (shouldNotify) {
-          // Slack のリンク: SITE_URL 優先（本番URLを明示可能）。未設定なら VERCEL_URL（Vercel のみ）、最後に localhost
-          const baseUrl =
-            process.env.SITE_URL?.trim() ||
-            (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
-            "http://localhost:3000";
-          await notifySlack({
-            title: src.title,
-            riskDetailText: change.penaltyDetail ?? null,
-            detailPageUrl: `${baseUrl}/norm-changes/${change.id}`,
-          });
-        }
-      }
+      await notifyOnChange(change, src);
     }
 
     return {
