@@ -116,7 +116,7 @@ describe("GET /api/norm-changes", () => {
   it("from/to パラメータで publishedAt 範囲フィルタが付く", async () => {
     mockFindMany.mockResolvedValue([]);
 
-    await GET(makeRequest({ from: "20260101", to: "20260131" }));
+    await GET(makeRequest({ from: "2026-01-01", to: "2026-01-31" }));
 
     expect(mockFindMany).toHaveBeenCalledWith(
       expect.objectContaining({

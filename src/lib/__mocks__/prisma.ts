@@ -19,9 +19,6 @@ export const prisma = {
     findMany: vi.fn(),
     create: vi.fn(),
   },
-  $transaction: vi.fn((fn: (tx: unknown) => Promise<unknown>) => fn({
-    normChange: { create: vi.fn() },
-    normChangeTag: { createMany: vi.fn() },
-  })),
+  $transaction: vi.fn((fn: (tx: unknown) => Promise<unknown>) => fn(prisma)),
   $disconnect: vi.fn(),
 };

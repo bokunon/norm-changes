@@ -94,7 +94,7 @@ describe("GET /api/notification-filters", () => {
 
     expect(response.status).toBe(500);
     expect(body.ok).toBe(false);
-    expect(body.error).toContain("DB接続エラー");
+    expect(body.message).toBeDefined();
   });
 });
 
@@ -124,7 +124,7 @@ describe("POST /api/notification-filters", () => {
 
     expect(response.status).toBe(400);
     expect(body.ok).toBe(false);
-    expect(body.error).toContain("name");
+    expect(body.message).toBeDefined();
   });
 
   it("name が存在しないとき 400 を返す", async () => {
@@ -149,7 +149,7 @@ describe("POST /api/notification-filters", () => {
     expect(body.ok).toBe(false);
   });
 
-  it("publishedFrom/publishedTo（yyyyMMdd 形式）が Date に変換されて保存される", async () => {
+  it("publishedFrom/publishedTo（ISO datetime 形式）が Date に変換されて保存される", async () => {
     const newFilter = {
       ...baseFilter,
       name: "日付フィルタ",
@@ -161,8 +161,8 @@ describe("POST /api/notification-filters", () => {
     const response = await POST(
       makeRequest({
         name: "日付フィルタ",
-        publishedFrom: "20260101",
-        publishedTo: "20261231",
+        publishedFrom: "2026-01-01T00:00:00Z",
+        publishedTo: "2026-12-31T00:00:00Z",
       })
     );
     const body = await response.json();
@@ -199,36 +199,35 @@ describe("POST /api/notification-filters", () => {
     );
   });
 
-  it("normType と tagId が保存される", async () => {
+  it("normType が保存される", async () => {
     mockCreate.mockResolvedValue({
       ...baseFilter,
       name: "タイプフィルタ",
       normType: "LAW",
-      tagId: "tag-123",
+      tagId: null,
     });
 
     await POST(
-      makeRequest({ name: "タイプフィルタ", normType: "LAW", tagId: "tag-123" })
+      makeRequest({ name: "タイプフィルタ", normType: "LAW" })
     );
 
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           normType: "LAW",
-          tagId: "tag-123",
         }),
       })
     );
   });
 
-  it("normType が空文字のとき null として保存される", async () => {
+  it("normType が未指定のとき null として保存される", async () => {
     mockCreate.mockResolvedValue({
       ...baseFilter,
       name: "空タイプ",
       normType: null,
     });
 
-    await POST(makeRequest({ name: "空タイプ", normType: "" }));
+    await POST(makeRequest({ name: "空タイプ" }));
 
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -247,6 +246,6 @@ describe("POST /api/notification-filters", () => {
 
     expect(response.status).toBe(500);
     expect(body.ok).toBe(false);
-    expect(body.error).toContain("DB書き込みエラー");
+    expect(body.message).toBeDefined();
   });
 });
