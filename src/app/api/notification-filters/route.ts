@@ -5,6 +5,8 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { apiError, ErrorCode } from "@/lib/api-response";
+import { NotificationFilterCreateSchema } from "@/lib/schemas";
 
 function toIsoDate(d: Date | null): string | null {
   return d ? d.toISOString().slice(0, 10) : null;
@@ -17,13 +19,10 @@ function hasNotificationFilter(): boolean {
 
 export async function GET() {
   if (!hasNotificationFilter()) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error:
-          "Prisma クライアントに NotificationFilter がありません。`npx prisma generate` を実行してから再デプロイしてください。",
-      },
-      { status: 503 }
+    return apiError(
+      ErrorCode.INTERNAL_ERROR,
+      "Prisma クライアントに NotificationFilter がありません。`npx prisma generate` を実行してから再デプロイしてください。",
+      503
     );
   }
   try {
@@ -48,62 +47,50 @@ export async function GET() {
       })),
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    return NextResponse.json(
-      { ok: false, error: message },
-      { status: 500 }
-    );
+    console.error("[notification-filters] GET 失敗:", e instanceof Error ? e.message : String(e));
+    return apiError(ErrorCode.INTERNAL_ERROR, "サーバーエラーが発生しました", 500);
   }
 }
 
 export async function POST(request: Request) {
   if (!hasNotificationFilter()) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error:
-          "Prisma クライアントに NotificationFilter がありません。`npx prisma generate` を実行してから再デプロイしてください。",
-      },
-      { status: 503 }
+    return apiError(
+      ErrorCode.INTERNAL_ERROR,
+      "Prisma クライアントに NotificationFilter がありません。`npx prisma generate` を実行してから再デプロイしてください。",
+      503
     );
   }
-  let body: {
-    name: string;
-    publishedFrom?: string | null;
-    publishedTo?: string | null;
-    riskSurvival?: boolean;
-    riskFinancial?: boolean;
-    riskCredit?: boolean;
-    riskOther?: boolean;
-    normType?: string | null;
-    tagId?: string | null;
-  };
+  let rawBody: unknown;
   try {
-    body = await request.json();
+    rawBody = await request.json();
   } catch {
-    return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
+    return apiError(ErrorCode.BAD_REQUEST, "Invalid JSON", 400);
   }
 
-  const name = typeof body.name === "string" ? body.name.trim() : "";
-  if (!name) {
-    return NextResponse.json({ ok: false, error: "name は必須です" }, { status: 400 });
+  const parsed = NotificationFilterCreateSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { ok: false, code: "VALIDATION_ERROR", message: parsed.error.issues.map((e: { message: string }) => e.message).join(", ") },
+      { status: 400 }
+    );
   }
+  const body = parsed.data;
 
-  const publishedFrom = parseYyyyMMdd(body.publishedFrom);
-  const publishedTo = parseYyyyMMdd(body.publishedTo);
+  const publishedFrom = body.publishedFrom ? new Date(body.publishedFrom) : null;
+  const publishedTo = body.publishedTo ? new Date(body.publishedTo) : null;
 
   try {
     const filter = await prisma.notificationFilter.create({
       data: {
-        name,
+        name: body.name,
         publishedFrom: publishedFrom ?? undefined,
         publishedTo: publishedTo ?? undefined,
-        riskSurvival: body.riskSurvival === true,
-        riskFinancial: body.riskFinancial === true,
-        riskCredit: body.riskCredit === true,
-        riskOther: body.riskOther === true,
-        normType: body.normType && String(body.normType).trim() ? body.normType.trim() : null,
-        tagId: body.tagId && String(body.tagId).trim() ? body.tagId.trim() : null,
+        riskSurvival: body.riskSurvival,
+        riskFinancial: body.riskFinancial,
+        riskCredit: body.riskCredit,
+        riskOther: body.riskOther,
+        normType: body.normType ?? null,
+        tagId: body.tagId ?? null,
       },
     });
 
@@ -125,19 +112,7 @@ export async function POST(request: Request) {
     },
   });
   } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    return NextResponse.json(
-      { ok: false, error: message },
-      { status: 500 }
-    );
+    console.error("[notification-filters] POST 失敗:", e instanceof Error ? e.message : String(e));
+    return apiError(ErrorCode.INTERNAL_ERROR, "サーバーエラーが発生しました", 500);
   }
-}
-
-function parseYyyyMMdd(s: string | null | undefined): Date | null {
-  if (s == null || typeof s !== "string") return null;
-  const normalized = s.replace(/-/g, "").trim();
-  if (!/^\d{8}$/.test(normalized)) return null;
-  return new Date(
-    `${normalized.slice(0, 4)}-${normalized.slice(4, 6)}-${normalized.slice(6, 8)}T00:00:00Z`
-  );
 }

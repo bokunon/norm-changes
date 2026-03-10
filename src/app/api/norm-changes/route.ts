@@ -6,10 +6,10 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { apiError, ErrorCode } from "@/lib/api-response";
+import { NormChangesQuerySchema } from "@/lib/schemas";
 
 const RISK_VALUES = ["survival", "financial", "credit", "other"] as const;
-const DEFAULT_LIMIT = 20;
-const MAX_LIMIT = 100;
 
 /** 今日 0:00 UTC */
 function startOfTodayUtc(): Date {
@@ -19,17 +19,22 @@ function startOfTodayUtc(): Date {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const from = searchParams.get("from");
-  const to = searchParams.get("to");
-  const type = searchParams.get("type");
+
+  const queryObject: Record<string, string> = {};
+  searchParams.forEach((value, key) => { queryObject[key] = value; });
+  const queryParsed = NormChangesQuerySchema.safeParse(queryObject);
+  if (!queryParsed.success) {
+    return apiError(
+      ErrorCode.VALIDATION_ERROR,
+      queryParsed.error.issues.map((e: { message: string }) => e.message).join(", "),
+      400
+    );
+  }
+
+  const { cursor, limit, type, from, to } = queryParsed.data;
   const tagId = searchParams.get("tagId");
   const riskParam = searchParams.get("risk");
   const enforcement = searchParams.get("enforcement"); // not_yet | enforced
-  const limit = Math.min(
-    Number(searchParams.get("limit")) || DEFAULT_LIMIT,
-    MAX_LIMIT
-  );
-  const cursor = searchParams.get("cursor") ?? undefined;
 
   const todayStart = startOfTodayUtc();
   const normSourceWhere: {
@@ -39,12 +44,12 @@ export async function GET(request: Request) {
     effectiveAt?: { not: null; lte: Date };
   } = {};
   if (from) {
-    const d = parseYyyyMMdd(from);
-    if (d) normSourceWhere.publishedAt = { ...normSourceWhere.publishedAt, gte: d };
+    const d = new Date(`${from}T00:00:00Z`);
+    if (!isNaN(d.getTime())) normSourceWhere.publishedAt = { ...normSourceWhere.publishedAt, gte: d };
   }
   if (to) {
-    const d = parseYyyyMMdd(to);
-    if (d) normSourceWhere.publishedAt = { ...normSourceWhere.publishedAt, lte: d };
+    const d = new Date(`${to}T00:00:00Z`);
+    if (!isNaN(d.getTime())) normSourceWhere.publishedAt = { ...normSourceWhere.publishedAt, lte: d };
   }
   if (type) normSourceWhere.type = type;
   // Issue #53: 施行状態で絞り込み（effectiveAt で判定）
@@ -138,9 +143,3 @@ export async function GET(request: Request) {
   });
 }
 
-function parseYyyyMMdd(s: string): Date | null {
-  if (!/^\d{8}$/.test(s)) return null;
-  return new Date(
-    `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}T00:00:00Z`
-  );
-}
