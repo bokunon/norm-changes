@@ -5,7 +5,10 @@
 ## ドキュメント
 
 - **[アーキテクチャ概要](docs/architecture.md)** — 全体構成（コンテキスト図）、データ構造（ER図）、環境構成案。実装チケットはここを参照。
-- **[Supabase 作成〜接続ハンズオン](docs/supabase-setup.md)** — プロジェクト作成から .env 設定・マイグレーションまで手順付き。
+- **[現状仕様とギャップ整理](docs/current-spec-and-gaps.md)** — e-Gov API の利用状況・AI レポート実装状況まとめ。
+- **[Supabase 作成〜接続ハンズオン](docs/howto/supabase-setup.md)** — プロジェクト作成から .env 設定・マイグレーションまで手順付き。
+- **[Vercel 環境変数](docs/howto/vercel-env.md)** / **[CLI デプロイ](docs/howto/vercel-deploy-by-cli.md)** — Vercel 運用手順。
+- **[ingest ローカル確認手順](docs/howto/verify-local-notification-filters.md)** — 通知フィルタのローカル動作確認。
 
 ## 初回セットアップ
 

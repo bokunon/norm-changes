@@ -47,21 +47,21 @@
 
 ## 4. 取得内容を元にした「企業が何をすべきか」レポート
 
-**生成 AI は使っていません。API Key を渡していないのはそのためです。**
+**生成 AI（OpenAI）を使った AI レポートが実装済みです（Issue #12）。**
 
-レポートに相当する部分は次の 2 つです。
+レポートに相当する部分は次のとおりです。
 
 1. **NormChange の作成**（`POST /api/analyze`）
    - `NormSource` を元に `NormChange` を 1 件作成。
-   - `summary` / `obligationLevel` / `penaltyRisk` などは **`src/lib/analyze.ts` のキーワード判定のみ**で算出しています。
-2. **`src/lib/analyze.ts` の実装**
-   - `buildSummary(title, rawText)`: `rawText` があれば先頭 300 文字を切り出し、なければ「○○の改正・更新」。
-   - `detectPenaltyRisk(text)`: 「罰金」「懲役」「業務停止」などのキーワードが含まれるかで HIGH/NONE。
-   - `detectObligationLevel(text)`: 「しなければならない」などのキーワードが含まれるかで MUST/INFO。
+   - `OPENAI_API_KEY` が設定されている場合は **OpenAI（gpt-4o-mini 等）で AI 判定**を行い、`riskSurvival`/`riskFinancial`/`riskCredit`/`riskOther` のリスク分類と `penaltyDetail`（リスクの解釈断定文）、`reportActionItems`（アクション一覧）、`reportDetailedRecommendations`（詳細推奨アクション＋根拠）を生成。
+   - `OPENAI_API_KEY` が未設定の場合はキーワードフォールバック（`src/lib/analyze.ts`）で判定。フォールバック時は `penaltyDetail` を生成できないため `NormChange` を登録せず 503 を返す（Issue #40）。
 
-**重要な点**: 現状 `NormSource.rawText` は常に `null` なので、実質的には **title（法令名）だけ**が `analyze` に渡されています。そのため、キーワード判定もあまり効かず、レポートの中身は「法令名 + 改正・更新」「罰則リスクはほぼ NONE」「義務レベルはほぼ INFO」になりがちです。
+2. **リスク分類（Issue #16/#19）**
+   - 旧来の `obligationLevel`・`penaltyRisk` は削除済み（Issue #67/#68）。
+   - 現在は `riskSurvival`（業務停止・免許取消等）/ `riskFinancial`（罰金・課徴金等）/ `riskCredit`（社名公表・勧告等）/ `riskOther`（手続き変更等）の 4 区分 Boolean。
+   - `penaltyDetail` は survival/financial/credit のいずれかが true のときのみ設定される。riskOther のみなら null。
 
-「企業が何をすべきか」を自然文で説明するようなレポートにするには、**条文本文（rawText）をどこかで取得したうえで、生成 AI（OpenAI 等）で要約・アクション抽出する**実装が別途必要になります。その際に初めて API Key の設定が必要になります。
+**現状の注意点**: e-Gov bulkdownload 経由で取得した場合のみ `rawText`・`rawTextPrev` が入る。それ以外（更新法令一覧のみ取得時）は `rawText = null` のため、AI への入力は法令名（title）のみとなる。
 
 ---
 
@@ -71,9 +71,9 @@
 |------|------------|------|
 | 日付指定で取得 | 日付指定で ZIP 取得 | 日付指定で **更新法令一覧（XML）** を取得し DB に保存。ZIP は未使用。 |
 | 履歴で公示済み施行前 | ZIP の ID を元に履歴 API で公示済み・施行前の内容取得 | 履歴 API は未使用。一覧のメタデータのみ保存。施行前の**本文**は未取得。 |
-| 企業向けレポート | 取得内容から「何をすべきか」をレポート | キーワードベースの簡易判定のみ。生成 AI 未使用・API Key 不要。rawText が null のため判定も薄い。 |
+| 企業向けレポート | 取得内容から「何をすべきか」をレポート | **OpenAI で AI レポート生成済み（Issue #12）**。`OPENAI_API_KEY` が設定されていれば AI 判定、未設定ならキーワードフォールバック（失敗時は 503）。 |
 
-このあと「ZIP 取得」「履歴で施行前本文取得」「生成 AI でレポート」のどれから手を入れるか決めると、修正方針がはっきりします。
+このあと「ZIP 取得（bulkdownload）」「履歴で施行前本文取得」などで `rawText` を取得すると、AI 判定の精度が大幅に向上します。
 
 ---
 

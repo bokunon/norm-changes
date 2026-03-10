@@ -66,23 +66,35 @@ flowchart LR
 erDiagram
     NORM_SOURCE {
         string id
+        string externalId
         string type
         string title
         string number
         string publisher
-        string publishedAt
-        string effectiveAt
+        datetime publishedAt
+        datetime effectiveAt
         string url
+        text rawText
+        text rawTextPrev
+        string bulkdownloadDate
+        datetime createdAt
+        datetime updatedAt
     }
 
     NORM_CHANGE {
         string id
         string normSourceId
-        string summary
-        string obligationLevel
-        string penaltyRisk
-        string penaltyDetail
-        string effectiveFrom
+        text summary
+        text penaltyDetail
+        boolean riskSurvival
+        boolean riskFinancial
+        boolean riskCredit
+        boolean riskOther
+        datetime effectiveFrom
+        json reportActionItems
+        json reportDetailedRecommendations
+        datetime createdAt
+        datetime updatedAt
     }
 
     TAG {
@@ -90,13 +102,16 @@ erDiagram
         string type
         string key
         string labelJa
-        string description
+        text description
+        datetime createdAt
+        datetime updatedAt
     }
 
     NORM_CHANGE_TAG {
         string id
         string normChangeId
         string tagId
+        datetime createdAt
     }
 
     USER {
@@ -104,14 +119,49 @@ erDiagram
         string name
         string email
         string slackUserId
+        datetime createdAt
+        datetime updatedAt
     }
 
     USER_FILTER {
         string id
         string userId
         string name
-        string includeTagIds
-        string excludeTagIds
+        text includeTagIds
+        text excludeTagIds
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    CRON_EXECUTION_LOG {
+        string id
+        datetime startedAt
+        datetime endedAt
+        string result
+        json processedDates
+        text errorMessage
+        int durationMs
+    }
+
+    INGEST_STATE {
+        string id
+        string lastSuccessfulDate
+        datetime updatedAt
+    }
+
+    NOTIFICATION_FILTER {
+        string id
+        string name
+        datetime publishedFrom
+        datetime publishedTo
+        boolean riskSurvival
+        boolean riskFinancial
+        boolean riskCredit
+        boolean riskOther
+        string normType
+        string tagId
+        datetime createdAt
+        datetime updatedAt
     }
 
     NORM_SOURCE ||--o{ NORM_CHANGE : has
@@ -122,14 +172,20 @@ erDiagram
 
 #### モデル概要
 
-- `NormSource`  
-  - 法律・政令・省令・ガイドラインなど一次情報のメタデータとリンクを保持
-- `NormChange`  
-  - 実務的な「変更点」「対応が必要な論点」の単位
-- `Tag` / `NormChangeTag`  
+- `NormSource`
+  - 法律・政令・省令・ガイドラインなど一次情報のメタデータとリンクを保持。`rawText`（改正後全文）・`rawTextPrev`（改正前全文）は bulkdownload 取得時にのみ入る。`bulkdownloadDate` は ingest 日付スコープ用
+- `NormChange`
+  - 実務的な「変更点」「対応が必要な論点」の単位。リスクは `riskSurvival`（業務停止・免許取消等）/ `riskFinancial`（罰金・課徴金等）/ `riskCredit`（社名公表・勧告等）/ `riskOther`（手続き変更等）の4区分。`penaltyDetail` はリスクあり時のみ設定。`reportActionItems` / `reportDetailedRecommendations` は AI 生成レポート（OpenAI）
+- `Tag` / `NormChangeTag`
   - 業界・業種・機能領域・データ種別などを表す汎用タグと、その付与関係
-- `User` / `UserFilter`  
+- `User` / `UserFilter`
   - 利用者と、そのユーザーが関心を持つタグ条件（Web のフィルタや Slack 通知条件に利用）
+- `CronExecutionLog`
+  - ingest cron の実行ごとのログ（開始・終了・結果・処理日付一覧・エラー等を永続化）
+- `IngestState`
+  - ingest の進捗カーソル（1行のみ）。`lastSuccessfulDate` は「この日まで ingest と analyze 両方完了」を示し、次回 cron はその翌日から再開
+- `NotificationFilter`
+  - Slack 通知用フィルタ。新規 NormChange がこの条件（リスク区分・公示日範囲・種別・タグ）に一致したときのみ Slack 通知
 
 ### 環境構成案
 
