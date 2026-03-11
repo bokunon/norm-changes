@@ -242,12 +242,13 @@ export default function NormChangesPage() {
                       {stripObligationAndLevelFromSummary(item.summary) || (item.summary ?? "")}
                     </p>
                     <div className="flex flex-wrap gap-2 text-xs">
-                      {/* Issue #115: 直近10日以内の新着に NEW バッジ */}
-                      {status && new Date(item.createdAt) >= new Date(Date.now() - 10 * 24 * 60 * 60 * 1000) && (
-                        <span className="rounded bg-red-100 dark:bg-red-900/40 px-1.5 py-0.5 font-bold text-red-700 dark:text-red-300">
-                          NEW
-                        </span>
-                      )}
+                      {/* Issue #115: 公示日が直近10日以内なら NEW バッジ */}
+                      {item.normSource?.publishedAt &&
+                        new Date(item.normSource.publishedAt) >= new Date(Date.now() - 10 * 24 * 60 * 60 * 1000) && (
+                          <span className="rounded bg-red-100 dark:bg-red-900/40 px-1.5 py-0.5 font-bold text-red-700 dark:text-red-300">
+                            NEW
+                          </span>
+                        )}
                       {/* Issue #53: 施行済・未施行のバッジ。Issue #77: 施行済はグレー（省令・政令と同じ表記） */}
                       <span
                         className={
