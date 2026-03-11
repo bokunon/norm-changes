@@ -44,6 +44,11 @@ function isEnforced(effectiveAt: string | null): boolean {
 
 type EnforcementFilter = "not_yet" | "enforced" | "all";
 
+type SystemStatus = {
+  lastDetectedAt: string | null;
+  recentCount: number;
+};
+
 export default function NormChangesPage() {
   const [items, setItems] = useState<NormChangeItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,6 +56,16 @@ export default function NormChangesPage() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [status, setStatus] = useState<SystemStatus | null>(null);
+
+  useEffect(() => {
+    fetch("/api/system-status")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok) setStatus({ lastDetectedAt: data.lastDetectedAt, recentCount: data.recentCount });
+      })
+      .catch(() => {});
+  }, []);
   // Issue #54: デフォルトは未施行・生存・金銭。Issue #75: 信用（社名公表等）も初期表示に含める
   const [enforcement, setEnforcement] = useState<EnforcementFilter>("not_yet");
   const [riskFilter, setRiskFilter] = useState<("survival" | "financial" | "credit" | "other")[]>([
@@ -114,9 +129,19 @@ export default function NormChangesPage() {
         <p className="text-zinc-700 dark:text-zinc-300 mb-1">
           法令変更の影響を生成 AI で整理する実験用ツールです。
         </p>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">
+        <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">
           内容の正確性は保証しません。ご利用の際は官報・省庁公式情報をご確認ください。
         </p>
+        {/* Issue #113: システム稼働状況インジケーター */}
+        {status && (
+          <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-4">
+            最終検知:{" "}
+            {status.lastDetectedAt
+              ? new Date(status.lastDetectedAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })
+              : "なし"}
+            　直近10日の新着: {status.recentCount} 件
+          </p>
+        )}
         <div className="flex flex-wrap gap-4 mb-6">
           {/* Issue #53: 施行状態で絞り込み */}
           <fieldset className="flex flex-wrap items-center gap-2 text-sm">
