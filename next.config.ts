@@ -5,6 +5,10 @@ dotenv.config();
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  env: {
+    // Issue #117: ビルド時の日付をクライアントに公開（フッター表示用）
+    NEXT_PUBLIC_BUILD_DATE: new Date().toISOString().slice(0, 10),
+  },
   async headers() {
     const securityHeaders = [
       { key: "X-Frame-Options", value: "SAMEORIGIN" },

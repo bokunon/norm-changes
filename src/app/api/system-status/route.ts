@@ -1,7 +1,7 @@
 /**
- * Issue #113: システム稼働状況 API
- * - 最後に NormChange が生成された日時
- * - 直近10日の新着件数
+ * Issue #113, #120: システム稼働状況 API
+ * - 最後に cron が正常完了した日時（CronExecutionLog で判定）
+ * - 直近10日の新着件数（NormChange.createdAt）
  * 認証不要（集計値のみを返す公開エンドポイント）
  */
 import { NextResponse } from "next/server";
@@ -13,10 +13,11 @@ export async function GET() {
     since.setDate(since.getDate() - 10);
     since.setHours(0, 0, 0, 0);
 
-    const [latest, recentCount] = await Promise.all([
-      prisma.normChange.findFirst({
-        orderBy: { createdAt: "desc" },
-        select: { createdAt: true },
+    const [lastCron, recentCount] = await Promise.all([
+      prisma.cronExecutionLog.findFirst({
+        where: { result: "ok" },
+        orderBy: { startedAt: "desc" },
+        select: { startedAt: true },
       }),
       prisma.normChange.count({
         where: { createdAt: { gte: since } },
@@ -25,7 +26,7 @@ export async function GET() {
 
     return NextResponse.json({
       ok: true,
-      lastDetectedAt: latest?.createdAt ?? null,
+      lastCronAt: lastCron?.startedAt ?? null,
       recentCount,
     });
   } catch (e) {

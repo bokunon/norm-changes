@@ -257,6 +257,11 @@ export async function GET(request: Request) {
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     await finishCronLog(log.id, startedAt, "error", [], message).catch(() => {});
+    await notifySlackAlert({
+      title: "cron予期しないエラー",
+      message: `エラー: ${message}`,
+      hint: "Vercel ログを確認してください。次回 cron で再試行されます。",
+    }).catch(() => {});
     return NextResponse.json(
       { ok: false, error: message },
       { status: 500 }

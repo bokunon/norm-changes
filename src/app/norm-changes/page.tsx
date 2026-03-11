@@ -14,6 +14,7 @@ type NormChangeItem = {
   riskOther: boolean;
   penaltyDetail: string | null;
   effectiveFrom: string | null;
+  createdAt: string;
   normSource: {
     id: string;
     type: string;
@@ -45,9 +46,11 @@ function isEnforced(effectiveAt: string | null): boolean {
 type EnforcementFilter = "not_yet" | "enforced" | "all";
 
 type SystemStatus = {
-  lastDetectedAt: string | null;
+  lastCronAt: string | null;
   recentCount: number;
 };
+
+type SortBy = "effectiveAt" | "publishedAt";
 
 export default function NormChangesPage() {
   const [items, setItems] = useState<NormChangeItem[]>([]);
@@ -56,13 +59,14 @@ export default function NormChangesPage() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [sortBy, setSortBy] = useState<SortBy>("effectiveAt");
   const [status, setStatus] = useState<SystemStatus | null>(null);
 
   useEffect(() => {
     fetch("/api/system-status")
       .then((r) => r.json())
       .then((data) => {
-        if (data.ok) setStatus({ lastDetectedAt: data.lastDetectedAt, recentCount: data.recentCount });
+        if (data.ok) setStatus({ lastCronAt: data.lastCronAt, recentCount: data.recentCount });
       })
       .catch(() => {});
   }, []);
@@ -80,6 +84,7 @@ export default function NormChangesPage() {
     if (to) params.set("to", to.replace(/-/g, ""));
     if (enforcement !== "all") params.set("enforcement", enforcement);
     if (riskFilter.length > 0) params.set("risk", riskFilter.join(","));
+    params.set("sortBy", sortBy);
     return params;
   };
 
@@ -99,7 +104,7 @@ export default function NormChangesPage() {
         }
       })
       .finally(() => setLoading(false));
-  }, [from, to, enforcement, riskFilter]);
+  }, [from, to, enforcement, riskFilter, sortBy]);
 
   const loadMore = () => {
     if (!nextCursor || loadingMore) return;
@@ -132,17 +137,33 @@ export default function NormChangesPage() {
         <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">
           内容の正確性は保証しません。ご利用の際は官報・省庁公式情報をご確認ください。
         </p>
-        {/* Issue #113: システム稼働状況インジケーター */}
+        {/* Issue #113 #120: システム稼働状況インジケーター */}
         {status && (
           <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-4">
-            最終検知:{" "}
-            {status.lastDetectedAt
-              ? new Date(status.lastDetectedAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })
-              : "なし"}
+            最終cron実行:{" "}
+            {status.lastCronAt
+              ? new Date(status.lastCronAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })
+              : "記録なし"}
             　直近10日の新着: {status.recentCount} 件
           </p>
         )}
         <div className="flex flex-wrap gap-4 mb-6">
+          {/* Issue #114: ソート */}
+          <fieldset className="flex flex-wrap items-center gap-2 text-sm">
+            <legend className="text-xs text-zinc-500 mr-1">ソート</legend>
+            {(["effectiveAt", "publishedAt"] as const).map((v) => (
+              <label key={v} className="flex items-center gap-1">
+                <input
+                  type="radio"
+                  name="sortBy"
+                  checked={sortBy === v}
+                  onChange={() => setSortBy(v)}
+                  className="border-zinc-400"
+                />
+                {v === "effectiveAt" ? "施行日" : "公示日"}
+              </label>
+            ))}
+          </fieldset>
           {/* Issue #53: 施行状態で絞り込み */}
           <fieldset className="flex flex-wrap items-center gap-2 text-sm">
             <legend className="sr-only">施行状態で絞り込み</legend>
@@ -221,6 +242,12 @@ export default function NormChangesPage() {
                       {stripObligationAndLevelFromSummary(item.summary) || (item.summary ?? "")}
                     </p>
                     <div className="flex flex-wrap gap-2 text-xs">
+                      {/* Issue #115: 直近10日以内の新着に NEW バッジ */}
+                      {status && new Date(item.createdAt) >= new Date(Date.now() - 10 * 24 * 60 * 60 * 1000) && (
+                        <span className="rounded bg-red-100 dark:bg-red-900/40 px-1.5 py-0.5 font-bold text-red-700 dark:text-red-300">
+                          NEW
+                        </span>
+                      )}
                       {/* Issue #53: 施行済・未施行のバッジ。Issue #77: 施行済はグレー（省令・政令と同じ表記） */}
                       <span
                         className={
@@ -279,6 +306,12 @@ export default function NormChangesPage() {
           </>
         )}
       </div>
+      {/* Issue #117: プログラム最終更新日 */}
+      {process.env.NEXT_PUBLIC_BUILD_DATE && (
+        <p className="text-xs text-zinc-300 dark:text-zinc-600 text-center mt-8">
+          Last updated: {process.env.NEXT_PUBLIC_BUILD_DATE}
+        </p>
+      )}
     </div>
   );
 }

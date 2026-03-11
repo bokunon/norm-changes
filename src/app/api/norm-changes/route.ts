@@ -31,7 +31,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const { cursor, limit, type, from, to } = queryParsed.data;
+  const { cursor, limit, type, from, to, sortBy } = queryParsed.data;
   const tagId = searchParams.get("tagId");
   const riskParam = searchParams.get("risk");
   const enforcement = searchParams.get("enforcement"); // not_yet | enforced
@@ -100,11 +100,10 @@ export async function GET(request: Request) {
       },
       tags: { include: { tag: true } },
     },
-    orderBy: [
-      { normSource: { publishedAt: "desc" } },
-      { createdAt: "desc" },
-      { id: "asc" },
-    ],
+    orderBy:
+      sortBy === "publishedAt"
+        ? [{ normSource: { publishedAt: "desc" } }, { createdAt: "desc" }, { id: "asc" }]
+        : [{ normSource: { effectiveAt: "desc" } }, { normSource: { publishedAt: "desc" } }, { id: "asc" }],
     take: limit + 1, // 次ページの有無判定用に1件多めに取得
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   });

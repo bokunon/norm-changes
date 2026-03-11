@@ -33,4 +33,5 @@ export const NormChangesQuerySchema = z.object({
   riskOther: z.enum(["true", "false"]).optional(),
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "日付はYYYY-MM-DD形式で指定してください").optional(),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "日付はYYYY-MM-DD形式で指定してください").optional(),
+  sortBy: z.enum(["effectiveAt", "publishedAt"]).default("effectiveAt"),
 });
