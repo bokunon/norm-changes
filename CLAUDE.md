@@ -28,7 +28,7 @@ npm run lint         # ESLint
 | `src/lib/run-analyze.ts` | NormSource→NormChange生成のメインロジック |
 | `src/lib/report-ai.ts` | OpenAIレポート生成（callOpenAI共通化済み） |
 | `src/lib/notify-on-change.ts` | 通知フィルタマッチング・Slack送信 |
-| `src/middleware.ts` | ADMIN_API_KEY認証（管理系APIを保護） |
+| `src/proxy.ts` | ADMIN_API_KEY認証・パスブロック（Next.js 16 proxy）|
 | `src/lib/schemas.ts` | Zodバリデーションスキーマ |
 | `src/lib/logger.ts` | pinoロガー（LOG_LEVEL環境変数対応） |
 | `src/app/api/ingest/cron/route.ts` | Vercel Cron（毎日22:00 UTC = 日本7:00）|
