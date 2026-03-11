@@ -109,16 +109,11 @@ export async function GET(request: Request) {
     const startDate = lastSuccess ? nextDayYyyyMMdd(lastSuccess) : endDate;
     let dates = dateRangeInclusive(startDate, endDate);
 
-    // maxDays: 1回の実行で処理する最大日数（1日≒15分のため、大量 backlog 時は1日に制限）
+    // maxDays: デバッグ用クエリパラメータ（通常は全期間処理。タイムアウト時は成功分まで登録され次回続きから再開）
     const maxDaysParam = new URL(request.url).searchParams.get("maxDays");
-    const maxDays =
-      maxDaysParam !== null
-        ? Math.min(3, Math.max(1, parseInt(maxDaysParam, 10) || 1))
-        : dates.length > 1
-          ? 1
-          : undefined; // 2日超の backlog 時はデフォルトで1日に制限（タイムアウト防止）
-    if (maxDays !== undefined && dates.length > maxDays) {
-      dates = dates.slice(0, maxDays);
+    if (maxDaysParam !== null) {
+      const maxDays = Math.max(1, parseInt(maxDaysParam, 10) || 1);
+      if (dates.length > maxDays) dates = dates.slice(0, maxDays);
     }
 
     // statement_timeout を 10 分に延長（Vercel タイムアウト対策）
