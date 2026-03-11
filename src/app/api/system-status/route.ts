@@ -20,7 +20,7 @@ export async function GET() {
         select: { startedAt: true },
       }),
       prisma.normChange.count({
-        where: { createdAt: { gte: since } },
+        where: { normSource: { publishedAt: { gte: since } } },
       }),
     ]);
 
