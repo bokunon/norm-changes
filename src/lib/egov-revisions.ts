@@ -15,6 +15,14 @@ const DEFAULT_HEADERS = {
   Accept: "application/json, application/xml, */*",
 };
 
+const FETCH_TIMEOUT_MS = 30_000;
+
+function fetchWithTimeout(url: string, options: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 /** law_revisions の 1 件（API v2 実レスポンス） */
 interface RevisionItem {
   law_revision_id?: string;
@@ -34,7 +42,7 @@ export async function fetchLawRevisions(
 ): Promise<{ ok: true; revisions: RevisionItem[] } | { ok: false; error: string }> {
   const url = `${API2_BASE}/law_revisions/${encodeURIComponent(lawId)}`;
   try {
-    const res = await fetch(url, { next: { revalidate: 0 }, headers: DEFAULT_HEADERS });
+    const res = await fetchWithTimeout(url, { next: { revalidate: 0 }, headers: DEFAULT_HEADERS });
     if (!res.ok) {
       const text = await res.text();
       return { ok: false, error: `law_revisions ${res.status}: ${text.slice(0, 200)}` };
@@ -118,7 +126,7 @@ export async function fetchLawData(
 ): Promise<{ ok: true; rawText: string } | { ok: false; error: string }> {
   const url = `${API2_BASE}/law_data/${encodeURIComponent(revisionId)}`;
   try {
-    const res = await fetch(url, { next: { revalidate: 0 }, headers: DEFAULT_HEADERS });
+    const res = await fetchWithTimeout(url, { next: { revalidate: 0 }, headers: DEFAULT_HEADERS });
     if (!res.ok) {
       const text = await res.text();
       return { ok: false, error: `law_data ${res.status}: ${text.slice(0, 200)}` };
